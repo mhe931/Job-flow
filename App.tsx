@@ -5,36 +5,43 @@ import { ICONS } from './constants';
 import Onboarding from './components/Onboarding';
 import Dashboard from './components/Dashboard';
 import AuthScreen from './components/AuthScreen';
-
-const DB_KEY_PREFIX = 'jobflow_user_';
+import { storage } from './services/storageService';
 
 const App: React.FC = () => {
-  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(() => localStorage.getItem('jobflow_current_user'));
+  const [authUid, setAuthUid] = useState<string | null>(() => localStorage.getItem('jobflow_auth_uid'));
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [step, setStep] = useState<AppStep>('auth');
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'));
 
-  // Load profile when auth changes or component mounts
+  // Auth synchronization with persistent "SQLite" mirror
   useEffect(() => {
-    if (currentUserEmail) {
-      const saved = localStorage.getItem(DB_KEY_PREFIX + currentUserEmail);
-      if (saved) {
-        setProfile(JSON.parse(saved));
-        setStep('dashboard');
+    if (authUid) {
+      const savedProfile = storage.getProfile(authUid);
+      if (savedProfile) {
+        setProfile(savedProfile);
+        // If they have resume data, skip to dashboard, else onboarding
+        setStep(savedProfile.resumeText ? 'dashboard' : 'onboarding');
       } else {
+        // New user from Google Auth
+        const newProfile: UserProfile = {
+          uid: authUid,
+          history: [],
+        };
+        storage.saveProfile(newProfile);
+        setProfile(newProfile);
         setStep('onboarding');
       }
     } else {
       setStep('auth');
     }
-  }, [currentUserEmail]);
+  }, [authUid]);
 
-  // Persist profile changes to local storage "database"
+  // Sync profile changes to persistence layer
   useEffect(() => {
-    if (profile && currentUserEmail) {
-      localStorage.setItem(DB_KEY_PREFIX + currentUserEmail, JSON.stringify(profile));
+    if (profile) {
+      storage.saveProfile(profile);
     }
-  }, [profile, currentUserEmail]);
+  }, [profile]);
 
   const toggleTheme = () => {
     const newTheme = !isDark;
@@ -43,36 +50,26 @@ const App: React.FC = () => {
     localStorage.theme = newTheme ? 'dark' : 'light';
   };
 
-  const handleLogin = (user: { email: string, name: string }) => {
-    setCurrentUserEmail(user.email);
-    localStorage.setItem('jobflow_current_user', user.email);
-    
-    // Check if profile already exists for this email
-    const saved = localStorage.getItem(DB_KEY_PREFIX + user.email);
-    if (saved) {
-      setProfile(JSON.parse(saved));
-      setStep('dashboard');
-    } else {
-      setStep('onboarding');
-    }
+  const handleGoogleLogin = (user: { uid: string, email: string }) => {
+    localStorage.setItem('jobflow_auth_uid', user.uid);
+    setAuthUid(user.uid);
   };
 
   const handleLogout = () => {
-    setCurrentUserEmail(null);
+    localStorage.removeItem('jobflow_auth_uid');
+    setAuthUid(null);
     setProfile(null);
-    localStorage.removeItem('jobflow_current_user');
     setStep('auth');
   };
 
   const handleOnboardingComplete = (resumeData: any) => {
-    const newProfile: UserProfile = {
-      id: `user-${Date.now()}`,
-      email: currentUserEmail || undefined,
+    if (!profile) return;
+    setProfile({
+      ...profile,
       resumeText: resumeData.text,
+      resumeUrl: resumeData.source === 'url' ? resumeData.text : undefined,
       resumeSourceType: resumeData.source,
-      history: []
-    };
-    setProfile(newProfile);
+    });
     setStep('dashboard');
   };
 
@@ -80,7 +77,7 @@ const App: React.FC = () => {
     if (!profile) return;
     setProfile({
       ...profile,
-      history: [session, ...profile.history] // Newest search first
+      history: [session, ...profile.history]
     });
   };
 
@@ -105,13 +102,13 @@ const App: React.FC = () => {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col transition-colors duration-300">
       <header className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 sticky top-0 z-50">
         <div className="max-w-[1600px] mx-auto px-6 h-18 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3 cursor-pointer" onClick={() => profile && setStep('dashboard')}>
+          <div className="flex items-center gap-3 cursor-pointer" onClick={() => profile?.resumeText && setStep('dashboard')}>
             <div className="bg-indigo-600 dark:bg-indigo-500 text-white p-2.5 rounded-xl shadow-lg shadow-indigo-500/20">
               {ICONS.Briefcase}
             </div>
             <div className="flex flex-col">
               <span className="font-black text-xl tracking-tighter text-slate-900 dark:text-white leading-none">JobFlow AI</span>
-              <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-1">Intelligence Layer</span>
+              <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-1">Persistent Intelligence</span>
             </div>
           </div>
           
@@ -119,14 +116,13 @@ const App: React.FC = () => {
             <button onClick={toggleTheme} className="p-2.5 rounded-xl text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">
               {isDark ? ICONS.Sun : ICONS.Moon}
             </button>
-            {profile && (
+            {authUid && (
               <div className="flex items-center gap-3 pl-4 border-l border-slate-100 dark:border-slate-800">
-                <div className="hidden md:flex flex-col items-end">
-                  <span className="text-xs font-black text-slate-900 dark:text-white">{currentUserEmail}</span>
-                  <span className="text-[9px] text-indigo-500 uppercase font-black tracking-widest">Permanent Account</span>
-                </div>
-                <button onClick={handleLogout} className="px-4 py-2 text-[10px] font-black bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 transition-all uppercase tracking-widest">
-                  Sign Out
+                <button 
+                  onClick={handleLogout} 
+                  className="px-4 py-2 text-[10px] font-black bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 transition-all uppercase tracking-widest"
+                >
+                  Log Out
                 </button>
               </div>
             )}
@@ -135,7 +131,7 @@ const App: React.FC = () => {
       </header>
 
       <main className="flex-1 w-full max-w-[1600px] mx-auto p-4 md:p-8">
-        {step === 'auth' && <AuthScreen onLogin={handleLogin} />}
+        {step === 'auth' && <AuthScreen onLogin={handleGoogleLogin} />}
         {step === 'onboarding' && <Onboarding onComplete={handleOnboardingComplete} />}
         {step === 'dashboard' && profile && (
           <Dashboard 
@@ -149,7 +145,7 @@ const App: React.FC = () => {
 
       <footer className="py-12 text-center border-t border-slate-100 dark:border-slate-900 bg-white/30 dark:bg-slate-900/30 backdrop-blur-sm">
         <p className="text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-[0.4em]">
-          &copy; 2024 JobFlow AI • Secured Intelligence Framework
+          &copy; 2024 JobFlow AI • Encrypted SQLite Mirror
         </p>
       </footer>
     </div>

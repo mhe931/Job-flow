@@ -15,14 +15,12 @@ const getCountryFlag = (countryName: string) => {
   if (name.includes('remote')) return '🌐';
   if (name.includes('singapore')) return '🇸🇬';
   if (name.includes('australia')) return '🇦🇺';
-  if (name.includes('germany')) return '🇩🇪';
   if (name.includes('switzerland')) return '🇨🇭';
   if (name.includes('india')) return '🇮🇳';
   if (name.includes('france')) return '🇫🇷';
   return '📍';
 };
 
-// Beautiful Gauge Component
 const Gauge = ({ value, size = 60, strokeWidth = 6, label }: { value: number, size?: number, strokeWidth?: number, label: string }) => {
   const radius = (size - strokeWidth) / 2;
   const circumference = radius * 2 * Math.PI;
@@ -58,20 +56,21 @@ const Dashboard: React.FC<DashboardProps> = ({ profile, onSearchSave, onJobClick
   const [showFilters, setShowFilters] = useState(true);
   const [config, setConfig] = useState<{ countries: string[], keywords: string[] } | null>(null);
   
-  const [selectedCountries, setSelectedCountries] = useState<string[]>([]);
-  const [selectedKeywords, setSelectedKeywords] = useState<string[]>([]);
+  const [selectedCountries, setSelectedCountries] = useState<string[]>(profile.suggestedCountries || []);
+  const [selectedKeywords, setSelectedKeywords] = useState<string[]>(profile.suggestedKeywords || []);
   
   const [activeSessionId, setActiveSessionId] = useState<string | null>(profile.history[0]?.id || null);
   const [selectedJob, setSelectedJob] = useState<{ job: JobResult, sessionId: string } | null>(null);
 
   useEffect(() => {
     const fetchConfig = async () => {
+      if (!profile.resumeText) return;
       setLoading(true);
       try {
-        const analysis = await analyzeResume(profile.resumeText, profile.resumeSourceType);
+        const analysis = await analyzeResume(profile.resumeText, profile.resumeSourceType || 'upload');
         setConfig(analysis);
-        setSelectedCountries(analysis.countries.slice(0, 3));
-        setSelectedKeywords(analysis.keywords.slice(0, 5));
+        if (selectedCountries.length === 0) setSelectedCountries(analysis.countries.slice(0, 3));
+        if (selectedKeywords.length === 0) setSelectedKeywords(analysis.keywords.slice(0, 5));
       } catch (err) {
         console.error("Analysis failed", err);
       } finally {
@@ -81,12 +80,18 @@ const Dashboard: React.FC<DashboardProps> = ({ profile, onSearchSave, onJobClick
     if (!config) fetchConfig();
   }, [profile.resumeText]);
 
+  // Persist local selection changes to profile
+  useEffect(() => {
+    profile.suggestedCountries = selectedCountries;
+    profile.suggestedKeywords = selectedKeywords;
+  }, [selectedCountries, selectedKeywords]);
+
   const handleSearch = async () => {
+    if (!profile.resumeText) return;
     setLoading(true);
     setVerifyingUrls(true);
     try {
       const results = await discoverJobs(selectedKeywords, selectedCountries, profile.resumeText);
-      // Automatically sort by Hiring Probability
       const sortedResults = results.sort((a, b) => b.hiringProbability - a.hiringProbability);
 
       const session: SearchSession = {
@@ -117,7 +122,7 @@ const Dashboard: React.FC<DashboardProps> = ({ profile, onSearchSave, onJobClick
   const copyUrl = (sessionId: string, jobId: string, url: string) => {
     navigator.clipboard.writeText(url);
     onJobClick(sessionId, jobId);
-    alert('Job URL copied and tracked.');
+    alert('Job URL copied and tracked in database.');
   };
 
   const exportResultsToCsv = (results: JobResult[], filename: string) => {
@@ -193,7 +198,6 @@ const Dashboard: React.FC<DashboardProps> = ({ profile, onSearchSave, onJobClick
 
   return (
     <div className="flex flex-col gap-6 animate-in fade-in duration-500 pb-20">
-      {/* Fixed Strategy Control Bar */}
       <div className="flex flex-wrap items-center justify-between gap-4 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md p-5 rounded-[2rem] border border-slate-200 dark:border-slate-800 shadow-xl sticky top-20 z-40 transition-all">
         <div className="flex items-center gap-4">
           <button 
@@ -203,8 +207,8 @@ const Dashboard: React.FC<DashboardProps> = ({ profile, onSearchSave, onJobClick
             {ICONS.Filter} {showFilters ? 'Apply Strategy' : 'Adjust Strategy'}
           </button>
           <div className="hidden sm:block">
-            <h2 className="text-xl font-black text-slate-900 dark:text-white tracking-tight leading-none">Market Discoveries</h2>
-            <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest mt-1">Sorted by Hiring Probability</p>
+            <h2 className="text-xl font-black text-slate-900 dark:text-white tracking-tight leading-none">Market Intelligence</h2>
+            <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest mt-1">Real-time DB Sync Active</p>
           </div>
         </div>
 
@@ -218,7 +222,6 @@ const Dashboard: React.FC<DashboardProps> = ({ profile, onSearchSave, onJobClick
       </div>
 
       <div className="flex flex-col lg:flex-row gap-8 items-start relative">
-        {/* Collapsible Strategy Sidebar */}
         <div className={`transition-all duration-500 ease-in-out ${showFilters ? 'w-full lg:w-80 opacity-100' : 'w-0 lg:w-0 opacity-0 pointer-events-none overflow-hidden'}`}>
           <div className="space-y-6">
             <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 p-6 shadow-xl space-y-4">
@@ -228,7 +231,7 @@ const Dashboard: React.FC<DashboardProps> = ({ profile, onSearchSave, onJobClick
                 className="w-full py-5 bg-indigo-600 dark:bg-indigo-500 text-white rounded-3xl font-black text-sm shadow-2xl shadow-indigo-600/30 hover:bg-indigo-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2 group mb-2"
               >
                 {loading ? <div className="animate-spin h-4 w-4 border-2 border-white/30 border-t-white rounded-full" /> : ICONS.Zap}
-                <span className="uppercase tracking-widest">{verifyingUrls ? 'Scanning Markets...' : 'Initiate Radar Scan'}</span>
+                <span className="uppercase tracking-widest">{verifyingUrls ? 'Scanning...' : 'Deploy Search Radar'}</span>
               </button>
 
               {config ? (
@@ -239,7 +242,7 @@ const Dashboard: React.FC<DashboardProps> = ({ profile, onSearchSave, onJobClick
               ) : (
                 <div className="py-12 text-center animate-pulse">
                   <div className="w-10 h-10 border-4 border-slate-100 border-t-indigo-600 rounded-full mx-auto mb-4 animate-spin"></div>
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Profiling Context...</p>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Profiling...</p>
                 </div>
               )}
             </div>
@@ -247,7 +250,7 @@ const Dashboard: React.FC<DashboardProps> = ({ profile, onSearchSave, onJobClick
             {profile.history.length > 0 && (
               <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
                 <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-4 flex items-center gap-2 px-1">
-                  {ICONS.History} Session Archives
+                  {ICONS.History} Database Sessions
                 </h4>
                 <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1 scrollbar-thin">
                   {profile.history.map(session => (
@@ -257,7 +260,7 @@ const Dashboard: React.FC<DashboardProps> = ({ profile, onSearchSave, onJobClick
                       className={`w-full text-left p-4 rounded-2xl border-2 transition-all ${activeSessionId === session.id ? 'bg-indigo-50 dark:bg-indigo-900/10 border-indigo-600' : 'bg-slate-50 dark:bg-slate-800 border-transparent hover:border-slate-200'}`}
                     >
                       <div className="text-[9px] font-black text-slate-400 mb-1 uppercase tracking-tighter">{new Date(session.timestamp).toLocaleDateString()}</div>
-                      <div className={`text-xs font-bold truncate ${activeSessionId === session.id ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-700 dark:text-slate-300'}`}>{session.keywords[0] || 'Unlabeled Session'}</div>
+                      <div className={`text-xs font-bold truncate ${activeSessionId === session.id ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-700 dark:text-slate-300'}`}>{session.keywords[0] || 'Unlabeled'}</div>
                     </button>
                   ))}
                 </div>
@@ -266,15 +269,14 @@ const Dashboard: React.FC<DashboardProps> = ({ profile, onSearchSave, onJobClick
           </div>
         </div>
 
-        {/* Results Stream */}
         <div className="flex-1 space-y-6 w-full min-w-0">
           {!activeSession && !loading && (
             <div className="bg-white dark:bg-slate-900 rounded-[3rem] border border-slate-200 dark:border-slate-800 p-24 text-center space-y-6 shadow-sm">
               <div className="w-24 h-24 bg-slate-50 dark:bg-slate-800 rounded-[2.5rem] flex items-center justify-center mx-auto text-slate-300 dark:text-slate-600 border border-slate-100 dark:border-slate-800">
                 {ICONS.Search}
               </div>
-              <h2 className="text-4xl font-black text-slate-900 dark:text-white tracking-tighter">Market Intelligence Offline</h2>
-              <p className="text-slate-500 dark:text-slate-400 max-w-sm mx-auto font-medium italic">Configure strategy parameters on the left and deploy the agent scan.</p>
+              <h2 className="text-4xl font-black text-slate-900 dark:text-white tracking-tighter">Market Pipeline Offline</h2>
+              <p className="text-slate-500 dark:text-slate-400 max-w-sm mx-auto font-medium italic">Configure strategy parameters and deploy radar scan to populate your persistent DB.</p>
             </div>
           )}
 
@@ -305,13 +307,11 @@ const Dashboard: React.FC<DashboardProps> = ({ profile, onSearchSave, onJobClick
                       </div>
                     )}
 
-                    {/* Gauge Cluster */}
                     <div className="md:w-44 shrink-0 flex flex-col items-center justify-center gap-6 bg-slate-50 dark:bg-slate-800/40 rounded-[2rem] p-6 border border-slate-100 dark:border-slate-800 transition-colors">
                       <Gauge value={job.hiringProbability} label="Hiring Prob" />
                       <Gauge value={job.matchScore} size={50} strokeWidth={4} label="JD Match" />
                     </div>
 
-                    {/* Job Details */}
                     <div className="flex-1 space-y-4">
                       <div className="space-y-2">
                         <div className="flex items-center gap-2">
@@ -326,7 +326,6 @@ const Dashboard: React.FC<DashboardProps> = ({ profile, onSearchSave, onJobClick
                       </p>
                     </div>
 
-                    {/* Interaction Block */}
                     <div className="md:w-64 shrink-0 flex flex-col justify-center gap-3">
                       <button 
                         onClick={(e) => { e.stopPropagation(); handleVisit(activeSession.id, job.id, job.url); }}
@@ -358,7 +357,6 @@ const Dashboard: React.FC<DashboardProps> = ({ profile, onSearchSave, onJobClick
         </div>
       </div>
 
-      {/* Detail Modal Layer */}
       {selectedJob && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8 bg-slate-950/40 backdrop-blur-xl animate-in fade-in duration-300" onClick={() => setSelectedJob(null)}>
           <div 
@@ -380,13 +378,13 @@ const Dashboard: React.FC<DashboardProps> = ({ profile, onSearchSave, onJobClick
 
             <div className="flex-1 overflow-y-auto p-10 space-y-12">
               <div className="flex justify-center gap-12">
-                <Gauge value={selectedJob.job.hiringProbability} size={120} strokeWidth={10} label="Success Probability" />
-                <Gauge value={selectedJob.job.matchScore} size={120} strokeWidth={10} label="Technical Alignment" />
+                <Gauge value={selectedJob.job.hiringProbability} size={120} strokeWidth={10} label="Hiring Probability" />
+                <Gauge value={selectedJob.job.matchScore} size={120} strokeWidth={10} label="Semantic Match" />
               </div>
 
               <div className="space-y-6">
                 <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-2">
-                  {ICONS.FileText} Semantic Analysis Summary
+                  {ICONS.FileText} Intelligence Summary
                 </h4>
                 <div className="text-xl text-slate-700 dark:text-slate-300 font-medium leading-relaxed bg-slate-50 dark:bg-slate-800/20 p-10 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 italic">
                   "{selectedJob.job.jd}"
@@ -395,7 +393,7 @@ const Dashboard: React.FC<DashboardProps> = ({ profile, onSearchSave, onJobClick
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="p-6 bg-slate-50 dark:bg-slate-800 rounded-3xl border border-slate-100 dark:border-slate-800">
-                  <span className="text-[9px] font-black uppercase text-slate-400 block mb-1">Found Via Pipeline</span>
+                  <span className="text-[9px] font-black uppercase text-slate-400 block mb-1">Found Via Deployment</span>
                   <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{new Date(selectedJob.job.timestamp).toLocaleString()}</span>
                 </div>
                 <div className="p-6 bg-slate-50 dark:bg-slate-800 rounded-3xl border border-slate-100 dark:border-slate-800">
@@ -410,7 +408,7 @@ const Dashboard: React.FC<DashboardProps> = ({ profile, onSearchSave, onJobClick
                 onClick={() => handleVisit(selectedJob.sessionId, selectedJob.job.id, selectedJob.job.url)}
                 className="flex-1 bg-indigo-600 text-white font-black py-5 rounded-[1.5rem] shadow-xl shadow-indigo-500/20 flex items-center justify-center gap-3 uppercase text-xs tracking-widest"
               >
-                Access Career Site {ICONS.ExternalLink}
+                Access Career Portal {ICONS.ExternalLink}
               </button>
               <button 
                 onClick={() => copyUrl(selectedJob.sessionId, selectedJob.job.id, selectedJob.job.url)}

@@ -8,7 +8,7 @@ export interface JobResult {
   country: string;
   url: string;
   matchScore: number;
-  hiringProbability: number; // Percentage
+  hiringProbability: number;
   jd: string;
   clicked: boolean;
   lastInteractedAt?: number;
@@ -24,11 +24,13 @@ export interface SearchSession {
 }
 
 export interface UserProfile {
-  id: string;
+  uid: string;
   email?: string;
-  name?: string;
-  resumeText: string;
-  resumeSourceType: ResumeSourceType;
+  displayName?: string;
+  photoURL?: string;
+  resumeText?: string;
+  resumeUrl?: string;
+  resumeSourceType?: ResumeSourceType;
   history: SearchSession[];
   suggestedCountries?: string[];
   suggestedKeywords?: string[];
