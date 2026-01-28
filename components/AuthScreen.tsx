@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { ICONS } from '../constants';
 
 interface AuthScreenProps {
-  onLogin: (user: { uid: string, email: string }) => void;
+  onLogin: (user: { uid: string, email: string, displayName: string, photoURL: string }) => void;
 }
 
 const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
@@ -15,10 +15,12 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
     setTimeout(() => {
       onLogin({
         uid: 'google-user-' + Math.random().toString(36).substr(2, 9),
-        email: 'authenticated@gmail.com'
+        email: 'career.explorer@gmail.com',
+        displayName: 'Alex Sterling',
+        photoURL: 'https://i.pravatar.cc/150?u=alexsterling'
       });
       setIsConnecting(false);
-    }, 1500);
+    }, 1200);
   };
 
   return (
@@ -30,10 +32,10 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
         </div>
       </div>
       <h1 className="text-6xl font-black text-slate-900 dark:text-white mb-6 tracking-tighter leading-none">
-        Secure Career<br/><span className="text-indigo-600 dark:text-indigo-400">Orchestration</span>
+        Elevate Your<br/><span className="text-indigo-600 dark:text-indigo-400">Career Orbit</span>
       </h1>
       <p className="text-xl text-slate-500 dark:text-slate-400 mb-12 leading-relaxed font-medium max-w-lg mx-auto">
-        Join the elite automated pipeline. Persistent database synchronization with end-to-end security.
+        Access the elite global job discovery engine. Authenticate via Google to sync your career database.
       </p>
       
       <div className="w-full max-w-sm">
@@ -52,12 +54,12 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
                 <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
                 <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
               </svg>
-              <span className="text-sm uppercase tracking-widest">Login with Google</span>
+              <span className="text-sm uppercase tracking-widest">Sign In with Google</span>
             </>
           )}
         </button>
         <p className="mt-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-          Secure Multi-Factor Handshake
+          Secured by JobFlow Intelligence
         </p>
       </div>
     </div>

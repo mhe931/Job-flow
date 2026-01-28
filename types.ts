@@ -13,6 +13,7 @@ export interface JobResult {
   clicked: boolean;
   lastInteractedAt?: number;
   timestamp: number;
+  isValidated?: boolean;
 }
 
 export interface SearchSession {
@@ -20,6 +21,7 @@ export interface SearchSession {
   timestamp: number;
   countries: string[];
   keywords: string[];
+  targetTitles: string[];
   results: JobResult[];
 }
 
@@ -34,6 +36,7 @@ export interface UserProfile {
   history: SearchSession[];
   suggestedCountries?: string[];
   suggestedKeywords?: string[];
+  targetTitles?: string[];
 }
 
-export type AppStep = 'auth' | 'onboarding' | 'dashboard';
+export type AppStep = 'auth' | 'onboarding' | 'dashboard' | 'profile';

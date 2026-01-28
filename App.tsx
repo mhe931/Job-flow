@@ -5,6 +5,7 @@ import { ICONS } from './constants';
 import Onboarding from './components/Onboarding';
 import Dashboard from './components/Dashboard';
 import AuthScreen from './components/AuthScreen';
+import ProfilePage from './components/ProfilePage';
 import { storage } from './services/storageService';
 
 const App: React.FC = () => {
@@ -13,30 +14,21 @@ const App: React.FC = () => {
   const [step, setStep] = useState<AppStep>('auth');
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'));
 
-  // Auth synchronization with persistent "SQLite" mirror
   useEffect(() => {
     if (authUid) {
       const savedProfile = storage.getProfile(authUid);
       if (savedProfile) {
         setProfile(savedProfile);
-        // If they have resume data, skip to dashboard, else onboarding
         setStep(savedProfile.resumeText ? 'dashboard' : 'onboarding');
       } else {
-        // New user from Google Auth
-        const newProfile: UserProfile = {
-          uid: authUid,
-          history: [],
-        };
-        storage.saveProfile(newProfile);
-        setProfile(newProfile);
-        setStep('onboarding');
+        // Fallback for missing profile
+        setStep('auth');
       }
     } else {
       setStep('auth');
     }
   }, [authUid]);
 
-  // Sync profile changes to persistence layer
   useEffect(() => {
     if (profile) {
       storage.saveProfile(profile);
@@ -50,8 +42,26 @@ const App: React.FC = () => {
     localStorage.theme = newTheme ? 'dark' : 'light';
   };
 
-  const handleGoogleLogin = (user: { uid: string, email: string }) => {
+  const handleGoogleLogin = (user: { uid: string, email: string, displayName: string, photoURL: string }) => {
     localStorage.setItem('jobflow_auth_uid', user.uid);
+    const existing = storage.getProfile(user.uid);
+    if (!existing) {
+      const newProfile: UserProfile = {
+        uid: user.uid,
+        email: user.email,
+        displayName: user.displayName,
+        photoURL: user.photoURL,
+        history: [],
+      };
+      storage.saveProfile(newProfile);
+      setProfile(newProfile);
+    } else {
+      setProfile({
+        ...existing,
+        displayName: user.displayName,
+        photoURL: user.photoURL,
+      });
+    }
     setAuthUid(user.uid);
   };
 
@@ -108,7 +118,7 @@ const App: React.FC = () => {
             </div>
             <div className="flex flex-col">
               <span className="font-black text-xl tracking-tighter text-slate-900 dark:text-white leading-none">JobFlow AI</span>
-              <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-1">Persistent Intelligence</span>
+              <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-1">Global Radar</span>
             </div>
           </div>
           
@@ -116,13 +126,28 @@ const App: React.FC = () => {
             <button onClick={toggleTheme} className="p-2.5 rounded-xl text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">
               {isDark ? ICONS.Sun : ICONS.Moon}
             </button>
-            {authUid && (
-              <div className="flex items-center gap-3 pl-4 border-l border-slate-100 dark:border-slate-800">
+            {profile && (
+              <div className="flex items-center gap-3 pl-4 border-l border-slate-200 dark:border-slate-800">
+                <button 
+                  onClick={() => setStep('profile')}
+                  className="flex items-center gap-2 group"
+                >
+                  <div className="text-right hidden sm:block">
+                    <div className="text-xs font-black text-slate-900 dark:text-white">{profile.displayName || 'User Profile'}</div>
+                    <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Settings</div>
+                  </div>
+                  <img 
+                    src={profile.photoURL || `https://ui-avatars.com/api/?name=${profile.displayName || 'User'}&background=random`} 
+                    alt="Profile" 
+                    className="w-10 h-10 rounded-xl border-2 border-slate-100 dark:border-slate-800 group-hover:border-indigo-500 transition-all"
+                  />
+                </button>
                 <button 
                   onClick={handleLogout} 
-                  className="px-4 py-2 text-[10px] font-black bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 transition-all uppercase tracking-widest"
+                  className="p-2.5 text-slate-400 hover:text-red-500 transition-colors"
+                  title="Logout"
                 >
-                  Log Out
+                  {ICONS.X}
                 </button>
               </div>
             )}
@@ -141,11 +166,19 @@ const App: React.FC = () => {
             onBack={() => setStep('onboarding')}
           />
         )}
+        {step === 'profile' && profile && (
+          <ProfilePage 
+            profile={profile} 
+            onUpdate={(updated) => { setProfile(updated); setStep('dashboard'); }} 
+            onBack={() => setStep('dashboard')}
+            onLogout={handleLogout}
+          />
+        )}
       </main>
 
       <footer className="py-12 text-center border-t border-slate-100 dark:border-slate-900 bg-white/30 dark:bg-slate-900/30 backdrop-blur-sm">
         <p className="text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-[0.4em]">
-          &copy; 2024 JobFlow AI • Encrypted SQLite Mirror
+          &copy; 2024 JobFlow AI • Intelligent Search Engine
         </p>
       </footer>
     </div>
