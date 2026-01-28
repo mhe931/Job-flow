@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { UserProfile } from '../types';
 import { ICONS } from '../constants';
 
+// Added missing ConfigStepProps interface
 interface ConfigStepProps {
   profile: UserProfile;
   onConfirm: (profile: UserProfile) => void;
@@ -14,17 +15,15 @@ const INITIAL_DATABASES = {
     "Australia", "Remote", "Switzerland", "Japan", "France", "Sweden", "UAE", "Ireland",
     "Norway", "Denmark", "Finland", "Israel", "India", "New Zealand", "Estonia"
   ],
-  keywords: [
-    "Python", "AWS", "GCP", "Azure", "Docker", "Kubernetes", "LLM", "RAG", "Vector DBs",
-    "TypeScript", "React", "Terraform", "CI/CD", "FastAPI", "Go", "Rust", "HuggingFace",
-    "TensorFlow", "PyTorch", "SQL", "NoSQL", "Snowflake", "Databricks", "OpenAI API",
-    "LangChain", "Node.js", "GraphQL", "Microservices", "Serverless"
+  titles: [
+    "Software Engineer", "Frontend Developer", "Backend Developer", "Product Manager",
+    "Data Scientist", "DevOps Engineer", "Staff Engineer", "Solutions Architect"
   ]
 };
 
 const ConfigStep: React.FC<ConfigStepProps> = ({ profile, onConfirm }) => {
   const [countries, setCountries] = useState<string[]>(profile.suggestedCountries || []);
-  const [keywords, setKeywords] = useState<string[]>(profile.suggestedKeywords || []);
+  const [titles, setTitles] = useState<string[]>(profile.targetTitles || []);
 
   const [databases, setDatabases] = useState(() => {
     const saved = localStorage.getItem('jobflow_db');
@@ -40,7 +39,7 @@ const ConfigStep: React.FC<ConfigStepProps> = ({ profile, onConfirm }) => {
     onConfirm({
       ...profile,
       suggestedCountries: countries,
-      suggestedKeywords: keywords
+      targetTitles: titles
     });
   };
 
@@ -147,7 +146,7 @@ const ConfigStep: React.FC<ConfigStepProps> = ({ profile, onConfirm }) => {
         <div className="space-y-4">
           <span className="inline-block bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest px-4 py-1.5 rounded-full shadow-lg shadow-indigo-500/20">Strategy Configuration</span>
           <h2 className="text-5xl font-black text-slate-900 dark:text-white tracking-tighter">Global Deployment Map</h2>
-          <p className="text-xl text-slate-500 dark:text-slate-400 max-w-2xl font-medium">Verify your market targets and skill stack to ensure the agent orchestrates the scan with maximum precision.</p>
+          <p className="text-xl text-slate-500 dark:text-slate-400 max-w-2xl font-medium">Verify your market targets to ensure the agent orchestrates the scan with maximum precision.</p>
         </div>
         <button onClick={handleStart} className="w-full md:w-auto px-12 py-6 bg-indigo-600 dark:bg-indigo-500 text-white rounded-3xl font-black text-lg shadow-2xl shadow-indigo-600/30 hover:-translate-y-1 active:scale-95 transition-all flex items-center justify-center gap-4">
           Deploy Intelligence Radar {ICONS.Zap}
@@ -156,7 +155,7 @@ const ConfigStep: React.FC<ConfigStepProps> = ({ profile, onConfirm }) => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
         <AutocompletePillList items={countries} onSet={setCountries} label="Geographic Hubs" icon={ICONS.MapPin} placeholder="Search regions..." category="countries" />
-        <AutocompletePillList items={keywords} onSet={setKeywords} label="Technical Stack" icon={ICONS.Search} placeholder="Search tech/tools..." category="keywords" />
+        <AutocompletePillList items={titles} onSet={setTitles} label="Strategic Roles" icon={ICONS.Briefcase} placeholder="Search roles..." category="titles" />
       </div>
     </div>
   );

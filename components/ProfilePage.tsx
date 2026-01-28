@@ -14,7 +14,6 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ profile, onUpdate, onBack, on
   const [resumeUrl, setResumeUrl] = useState(profile.resumeText || '');
   const [displayName, setDisplayName] = useState(profile.displayName || '');
   const [countries, setCountries] = useState(profile.suggestedCountries || []);
-  const [keywords, setKeywords] = useState(profile.suggestedKeywords || []);
   const [titles, setTitles] = useState(profile.targetTitles || []);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -27,7 +26,6 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ profile, onUpdate, onBack, on
         resumeText: resumeUrl,
         resumeUrl: resumeUrl,
         suggestedCountries: countries,
-        suggestedKeywords: keywords,
         targetTitles: titles
       });
       setIsSaving(false);
@@ -110,7 +108,6 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ profile, onUpdate, onBack, on
           <div className="bg-slate-100/50 dark:bg-slate-900/50 p-6 rounded-[2rem] space-y-6">
             <PillInput label="Target Regions" items={countries} onSet={setCountries} placeholder="Add..." />
             <PillInput label="Probable Titles" items={titles} onSet={setTitles} placeholder="Add..." />
-            <PillInput label="Skill Matrix" items={keywords} onSet={setKeywords} placeholder="Add..." />
           </div>
         </div>
 

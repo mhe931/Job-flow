@@ -20,7 +20,6 @@ export interface SearchSession {
   id: string;
   timestamp: number;
   countries: string[];
-  keywords: string[];
   targetTitles: string[];
   results: JobResult[];
 }
@@ -35,7 +34,6 @@ export interface UserProfile {
   resumeSourceType?: ResumeSourceType;
   history: SearchSession[];
   suggestedCountries?: string[];
-  suggestedKeywords?: string[];
   targetTitles?: string[];
 }
 

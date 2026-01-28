@@ -1,20 +1,45 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
 
-# Run and deploy your AI Studio app
+# JobFlow AI 🚀
 
-This contains everything you need to run your app locally.
+JobFlow AI is a high-fidelity career discovery engine that transforms your professional digital footprint into a strategic roadmap for job applications. Unlike traditional scrapers, JobFlow uses a multi-layered AI scoring engine to determine your technical match and hiring probability with recruiter-level precision.
 
-View your app in AI Studio: https://ai.studio/apps/drive/1z3isWD59jJp3HXlPBGyR1GCrJxAxL-ac
+## ✨ Features
 
-## Run Locally
+- **Link-Based Intelligence**: No more uploading static PDFs. Provide a link to your LinkedIn, portfolio, or online resume.
+- **Weighted Scoring Engine**: 
+  - **Match Score**: Analyzes technical stack alignment (50%), seniority fit (30%), and ecosystem tools (20%).
+  - **Hiring Probability**: Evaluates market competition (40%), strategic fit (40%), and domain specificity (20%).
+- **Persistent DB Sync**: Uses a "SQLite Mirror" (localStorage DAL) to persist your search history, target titles, and regional hubs across sessions.
+- **Smart Sorting**: Interacted jobs automatically move to the bottom of your radar, keeping fresh opportunities front and center.
+- **Global Hub Discovery**: AI-suggested regions and professional roles based on your specific technical DNA.
 
-**Prerequisites:**  Node.js
+## 🛠️ Tech Stack
 
+- **Frontend**: React 19 (ES6+), TypeScript, Tailwind CSS.
+- **AI**: Google Gemini 2.5 & 3.0 (Flash for strategy, Pro for discovery).
+- **Icons**: Lucide React.
+- **Persistence**: Custom persistence layer mimicking a relational database structure.
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## 🚀 Getting Started
+
+### Prerequisites
+- A Google Gemini API Key.
+
+### Environment Setup
+The application expects the following environment variable:
+- `process.env.API_KEY`: Your Google Gemini API key.
+
+### Local Development
+1. Open `index.html` in any modern web browser.
+2. Log in with the simulated Google Auth.
+3. Provide your professional resume URL to begin the analysis.
+
+## 🧠 System Architecture
+
+- **`App.tsx`**: Manages global state, authentication flow, and step-based navigation.
+- **`Dashboard.tsx`**: The core engine for displaying results, re-sorting interactions, and refining search parameters.
+- **`geminiService.ts`**: Handles all LLM interactions, including the weighted scoring heuristic.
+- **`storageService.ts`**: The Data Access Layer (DAL) that manages the local "SQLite Mirror."
+
+---
+*Created by the Senior Engineering Team at JobFlow.*
