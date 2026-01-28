@@ -57,7 +57,7 @@ export async function discoverJobs(countries: string[], titles: string[], resume
        - [40%] Strategic Fit: Does this role solve a problem the candidate has solved before?
        - [20%] Domain Specificity: Industry vertical alignment.
     
-    Output Format: JSON Array of high-fidelity JobResult objects. Each object must include a direct, reachable URL to the job posting.`;
+    Output Format: JSON Array of high-fidelity JobResult objects. Each object must include a direct, reachable URL to the job posting and a realistic 'postedAt' string (e.g. '2 hours ago', 'Yesterday', '3 days ago').`;
 
   const response = await ai.models.generateContent({
     model: 'gemini-3-pro-preview',
@@ -74,10 +74,11 @@ export async function discoverJobs(countries: string[], titles: string[], resume
             country: { type: Type.STRING },
             url: { type: Type.STRING },
             jd: { type: Type.STRING },
+            postedAt: { type: Type.STRING, description: "Relative time when the job was posted" },
             matchScore: { type: Type.INTEGER, description: "Professional technical match percentage" },
             hiringProbability: { type: Type.INTEGER, description: "Realistic hire probability based on market metrics" }
           },
-          required: ["company", "role", "country", "url", "jd", "matchScore", "hiringProbability"]
+          required: ["company", "role", "country", "url", "jd", "postedAt", "matchScore", "hiringProbability"]
         }
       }
     }

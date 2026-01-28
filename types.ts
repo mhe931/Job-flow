@@ -10,6 +10,7 @@ export interface JobResult {
   matchScore: number;
   hiringProbability: number;
   jd: string;
+  postedAt: string;
   clicked: boolean;
   lastInteractedAt?: number;
   timestamp: number;
