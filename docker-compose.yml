@@ -1,0 +1,10 @@
+
+version: '3.8'
+services:
+  jobflow:
+    build: .
+    ports:
+      - "8080:80"
+    environment:
+      - API_KEY=${API_KEY}
+    restart: unless-stopped

@@ -4,14 +4,13 @@ import { JobResult } from "../types";
 
 export async function analyzeResume(resumeContent: string, sourceType: string) {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const strategyContext = `Act as an Executive Recruitment Architect. 
-    Analyze this candidate's DNA for global market placement.
-    Return exactly:
-    1. 10 Strategic Job Titles.
-    2. 10 High-Growth Tech Hubs.
-    3. 15 Precise Industry Keywords.`;
+  const strategyContext = `Act as an Elite Tech Talent Architect. 
+    Analyze this professional's experience narrative to identify global market fit.
+    Perform a deep extraction of:
+    1. 10 Strategic High-Growth Tech Hubs (Countries/Cities) where this profile is in high demand.
+    2. 15 Precise Industry Keywords representing their unique technical stack and domain expertise.`;
 
-  const prompt = `${strategyContext}\n\nProfile Content:\n${resumeContent}`;
+  const prompt = `${strategyContext}\n\nCandidate Resume Content:\n${resumeContent}`;
 
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
@@ -21,11 +20,10 @@ export async function analyzeResume(resumeContent: string, sourceType: string) {
       responseSchema: {
         type: Type.OBJECT,
         properties: {
-          titles: { type: Type.ARRAY, items: { type: Type.STRING } },
           countries: { type: Type.ARRAY, items: { type: Type.STRING } },
           keywords: { type: Type.ARRAY, items: { type: Type.STRING } }
         },
-        required: ["titles", "countries", "keywords"]
+        required: ["countries", "keywords"]
       }
     }
   });
@@ -33,24 +31,28 @@ export async function analyzeResume(resumeContent: string, sourceType: string) {
   return JSON.parse(response.text || '{}');
 }
 
-export async function discoverJobs(keywords: string[], countries: string[], titles: string[], resumeText: string): Promise<JobResult[]> {
+export async function discoverJobs(keywords: string[], countries: string[], resumeText: string): Promise<JobResult[]> {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
-  // Reinforced instruction to check links twice
-  const prompt = `As a Senior Talent Headhunter and Web Researcher, find 12 REALISTIC, ACTIVE, and VERIFIED job openings.
-    Parameters:
-    - Target Titles: ${titles.join(', ')}
-    - Target Regions: ${countries.join(', ')}
-    - Core Stack: ${keywords.join(', ')}
+  const prompt = `As a Senior Global Headhunter, identify 12 ACTIVE and HIGH-QUALITY job openings.
+    Target Parameters:
+    - Regions: ${countries.join(', ')}
+    - Technical Domain: ${keywords.join(', ')}
     
-    CRITICAL PROTOCOLS:
-    1. VERIFY THE LINK TWICE: Ensure the "url" provided is a direct and functional link to the career portal or job listing. Do not return broken or speculative links.
-    2. ACCURACY: The Company name must be 100% accurate.
-    3. SCORING: Calculate Match Score (0-100) based on role requirements vs resume.
-    4. PROBABILITY: Calculate "hiringProbability" as an INTEGER (0-100) specifically considering market competition and resume strength: ${resumeText.slice(0, 800)}
-    5. DESCRIPTION: Provide a 2-3 sentence summary of the role focus as "jd".
-
-    Return only valid JSON.`;
+    SCORING ENGINE PROTOCOL (CRITICAL):
+    Compare the following Resume with each found Job Description:
+    
+    Resume Context: ${resumeText.slice(0, 1500)}
+    
+    1. matchScore: Calculate based on hard-skill overlap (languages, frameworks, tools).
+    2. hiringProbability: Perform a multi-factor analysis:
+       - Experience depth vs role seniority.
+       - Domain alignment (e.g., FinTech to FinTech).
+       - Technical maturity reflected in the resume.
+    
+    3. URL VERIFICATION: You MUST check the link twice. Return ONLY functional, direct links.
+    
+    Output Format: JSON Array of objects.`;
 
   const response = await ai.models.generateContent({
     model: 'gemini-3-pro-preview',
@@ -67,8 +69,8 @@ export async function discoverJobs(keywords: string[], countries: string[], titl
             country: { type: Type.STRING },
             url: { type: Type.STRING },
             jd: { type: Type.STRING },
-            matchScore: { type: Type.INTEGER },
-            hiringProbability: { type: Type.INTEGER }
+            matchScore: { type: Type.INTEGER, description: "Percentage 0-100" },
+            hiringProbability: { type: Type.INTEGER, description: "Percentage 0-100" }
           },
           required: ["company", "role", "country", "url", "jd", "matchScore", "hiringProbability"]
         }

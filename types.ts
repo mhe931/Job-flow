@@ -18,7 +18,6 @@ export interface JobResult {
 export interface SearchSession {
   id: string;
   timestamp: number;
-  titles: string[];
   countries: string[];
   keywords: string[];
   results: JobResult[];
@@ -31,7 +30,6 @@ export interface UserProfile {
   resumeText: string;
   resumeSourceType: ResumeSourceType;
   history: SearchSession[];
-  suggestedTitles?: string[];
   suggestedCountries?: string[];
   suggestedKeywords?: string[];
 }
