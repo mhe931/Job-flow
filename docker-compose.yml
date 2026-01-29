@@ -1,10 +1,28 @@
-
 version: '3.8'
+
 services:
   jobflow:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: jobflow-ai
     ports:
-      - "8080:80"
+      - "8501:8501"
     environment:
-      - API_KEY=${API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - ENCRYPTION_MASTER_KEY=${ENCRYPTION_MASTER_KEY}
+      - DATABASE_URL=sqlite:////app/data/jobflow.db
+    volumes:
+      # Persist database across container restarts
+      - jobflow-data:/app/data
     restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8501/_stcore/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  jobflow-data:
+    driver: local
