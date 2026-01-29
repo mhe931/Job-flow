@@ -11,19 +11,13 @@ from datetime import datetime, timedelta
 from typing import List, Tuple, Optional, Dict
 from urllib.parse import urlparse
 import httpx
-import google.generativeai as genai
+from google import genai
 from models import UserProfile, SearchMatrix, JobOpportunity
+from google.genai.types import GenerateContentConfig
 
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
-
-GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
-genai.configure(api_key=GEMINI_API_KEY)
-
-# Model selection
-FLASH_MODEL = genai.GenerativeModel('gemini-1.5-flash')
-PRO_MODEL = genai.GenerativeModel('gemini-1.5-pro')
 
 # Ghost job detection patterns
 GHOST_JOB_DOMAINS = [
@@ -33,6 +27,65 @@ GHOST_JOB_DOMAINS = [
 ]
 
 GHOST_JOB_AGE_DAYS = 60
+
+# ============================================================================
+# MODEL MANAGEMENT
+# ============================================================================
+
+def get_best_model(api_key: str) -> str:
+    """
+    Determine the best available model for the provided API key.
+    Prioritizes: gemini-1.5-pro > gemini-1.5-flash > gemini-2.0-flash-exp
+    """
+    if not api_key:
+        return 'gemini-1.5-flash'
+
+    client = genai.Client(api_key=api_key)
+    try:
+        # Fetch available models
+        # client.models.list() returns an iterator of Model objects
+        available_models = []
+        for m in client.models.list():
+            if 'generateContent' in m.supported_generation_methods:
+                # m.name is usually "models/model-name"
+                name = m.name.replace('models/', '')
+                available_models.append(name)
+
+        priority_queue = [
+            'gemini-1.5-pro',
+            'gemini-1.5-flash',
+            'gemini-2.0-flash-exp'
+        ]
+
+        for model in priority_queue:
+            if model in available_models:
+                return model
+        
+        return 'gemini-1.5-flash' # Default fallback
+        
+    except Exception as e:
+        print(f"Model list failed: {e}")
+        return 'gemini-1.5-flash'
+
+def _generate_json_content(client: genai.Client, model: str, prompt: str) -> Optional[Dict]:
+    """Helper to generate JSON content safely."""
+    try:
+        response = client.models.generate_content(
+            model=model,
+            contents=prompt,
+            config=GenerateContentConfig(response_mime_type="application/json")
+        )
+        return json.loads(response.text.strip())
+    except Exception as e:
+        # Fallback to text parsing if JSON mode fails or returns text
+        try:
+             # Retry without strict JSON mode if needed or just parse text
+             # If the first failed, it might be a block refusal or network error
+             if hasattr(e, 'message'):
+                print(f"GenAI Error: {e.message}")
+             return None
+        except:
+            return None
 
 
 # ============================================================================
@@ -311,21 +364,20 @@ def normalize_to_markdown(raw_text: str) -> str:
 # PROFILE ANALYZER
 # ============================================================================
 
-def analyze_profile(raw_text: str) -> Tuple[List[str], str]:
+def analyze_profile(raw_text: str, api_key: str) -> Tuple[List[str], str]:
     """
-    Extract technical skills and seniority from resume text.
+    Extract technical skills and seniority from resume text using BYOK.
     
     Args:
         raw_text: Resume content
+        api_key: User provided API key
     
     Returns:
         (skills, seniority) tuple
-        skills: List of technical skills
-        seniority: One of ['Junior', 'Mid', 'Senior', 'Lead', 'Principal']
-    
-    Raises:
-        ValueError: If LLM response is invalid
     """
+    client = genai.Client(api_key=api_key)
+    model = get_best_model(api_key)
+    
     prompt = f"""
 You are a senior technical recruiter. Analyze the following resume and extract:
 
@@ -348,7 +400,11 @@ Return ONLY valid JSON in this exact format:
 """
     
     try:
-        response = FLASH_MODEL.generate_content(prompt)
+        response = client.models.generate_content(
+            model=model,
+            contents=prompt,
+            config=GenerateContentConfig(response_mime_type="application/json")
+        )
         result = json.loads(response.text.strip())
         
         skills = result.get('skills', [])
@@ -360,7 +416,7 @@ Return ONLY valid JSON in this exact format:
         
         return skills, seniority
     
-    except (json.JSONDecodeError, KeyError, AttributeError) as e:
+    except (json.JSONDecodeError, KeyError, AttributeError, Exception) as e:
         raise ValueError(f"Failed to parse LLM response: {e}")
 
 
@@ -368,19 +424,17 @@ Return ONLY valid JSON in this exact format:
 # STRATEGIC MAPPER
 # ============================================================================
 
-def generate_search_matrix(profile: UserProfile) -> SearchMatrix:
+def generate_search_matrix(profile: UserProfile, api_key: str) -> SearchMatrix:
     """
-    Generate 10 hubs × 8 titles search matrix.
+    Generate 10 hubs × 8 titles search matrix using BYOK.
     
     Args:
         profile: UserProfile Pydantic model
-    
-    Returns:
-        SearchMatrix with suggested hubs and optimized titles
-    
-    Raises:
-        ValueError: If LLM response is invalid
+        api_key: User provided API key
     """
+    client = genai.Client(api_key=api_key)
+    model = get_best_model(api_key)
+
     skills_str = ', '.join(profile.extracted_skills)
     
     prompt = f"""
@@ -407,7 +461,11 @@ Return ONLY valid JSON in this exact format:
 """
     
     try:
-        response = FLASH_MODEL.generate_content(prompt)
+        response = client.models.generate_content(
+            model=model,
+            contents=prompt,
+            config=GenerateContentConfig(response_mime_type="application/json")
+        )
         result = json.loads(response.text.strip())
         
         hubs = result.get('hubs', [])[:10]  # Ensure exactly 10
@@ -426,7 +484,7 @@ Return ONLY valid JSON in this exact format:
             is_editable=True
         )
     
-    except (json.JSONDecodeError, KeyError, AttributeError) as e:
+    except (json.JSONDecodeError, KeyError, AttributeError, Exception) as e:
         raise ValueError(f"Failed to parse LLM response: {e}")
 
 
@@ -437,20 +495,16 @@ Return ONLY valid JSON in this exact format:
 def calculate_match_score(
     user_skills: List[str],
     job_description: str,
-    user_seniority: str
+    user_seniority: str,
+    api_key: str
 ) -> float:
     """
-    Calculate Match Score (0-100) using weighted formula:
-    50% TechStack + 30% Seniority + 20% Ecosystem
-    
-    Args:
-        user_skills: List of user's technical skills
-        job_description: Job posting text
-        user_seniority: User's seniority level
-    
-    Returns:
-        Match score (0-100)
+    Calculate Match Score (0-100).
     """
+    client = genai.Client(api_key=api_key)
+    # Use pro model for complex reasoning if available
+    model = get_best_model(api_key) 
+    
     prompt = f"""
 User Skills: {', '.join(user_skills)}
 User Seniority: {user_seniority}
@@ -470,32 +524,31 @@ Return ONLY valid JSON:
 """
     
     try:
-        response = PRO_MODEL.generate_content(prompt)
+        response = client.models.generate_content(
+            model=model,
+            contents=prompt,
+            config=GenerateContentConfig(response_mime_type="application/json")
+        )
         result = json.loads(response.text.strip())
         score = float(result.get('match_score', 50.0))
         return max(0.0, min(100.0, score))  # Clamp to [0, 100]
     
-    except (json.JSONDecodeError, KeyError, ValueError, AttributeError):
+    except (json.JSONDecodeError, KeyError, ValueError, AttributeError, Exception):
         return 50.0  # Default neutral score
 
 
 def calculate_hire_probability(
     profile: UserProfile,
     job: JobOpportunity,
-    job_description: str
+    job_description: str,
+    api_key: str
 ) -> float:
     """
-    Calculate Hiring Probability (0-100) using weighted formula:
-    40% MarketSaturation + 40% StrategicValue + 20% DomainFit
-    
-    Args:
-        profile: UserProfile Pydantic model
-        job: JobOpportunity Pydantic model
-        job_description: Job posting text
-    
-    Returns:
-        Hiring probability (0-100)
+    Calculate Hiring Probability (0-100).
     """
+    client = genai.Client(api_key=api_key)
+    model = get_best_model(api_key)
+
     skills_str = ', '.join(profile.extracted_skills)
     
     prompt = f"""
@@ -525,12 +578,16 @@ Return ONLY valid JSON:
 """
     
     try:
-        response = PRO_MODEL.generate_content(prompt)
+        response = client.models.generate_content(
+            model=model,
+            contents=prompt,
+            config=GenerateContentConfig(response_mime_type="application/json")
+        )
         result = json.loads(response.text.strip())
         score = float(result.get('hire_probability', 50.0))
         return max(0.0, min(100.0, score))  # Clamp to [0, 100]
     
-    except (json.JSONDecodeError, KeyError, ValueError, AttributeError):
+    except (json.JSONDecodeError, KeyError, ValueError, AttributeError, Exception):
         return 50.0  # Default neutral score
 
 
@@ -541,17 +598,6 @@ Return ONLY valid JSON:
 def extract_salary(job_description: str) -> Optional[str]:
     """
     Extract explicit salary range from job description using regex.
-    
-    Args:
-        job_description: Job posting text
-    
-    Returns:
-        Salary range string (e.g., "$120K-$160K USD") or None
-    
-    Examples:
-        "$120,000 - $160,000" -> "$120K-$160K USD"
-        "€80K-€100K" -> "€80K-€100K"
-        "£110,000-£150,000" -> "£110K-£150K"
     """
     # Patterns for various salary formats
     patterns = [
@@ -582,20 +628,13 @@ def extract_salary(job_description: str) -> Optional[str]:
     return None
 
 
-def infer_salary(hub: str, title: str, seniority: str) -> Tuple[str, float]:
+def infer_salary(hub: str, title: str, seniority: str, api_key: str) -> Tuple[str, float]:
     """
     Infer salary range using Gemini when explicit salary is missing.
-    
-    Args:
-        hub: Geographic location
-        title: Job title
-        seniority: Seniority level
-    
-    Returns:
-        (salary_range, confidence) tuple
-        salary_range: e.g., "$130K-$170K USD"
-        confidence: 0-100 based on data availability
     """
+    client = genai.Client(api_key=api_key)
+    model = get_best_model(api_key)
+
     prompt = f"""
 Estimate 2026 salary range for:
 - Title: {title}
@@ -621,7 +660,11 @@ Confidence scale:
 """
     
     try:
-        response = FLASH_MODEL.generate_content(prompt)
+        response = client.models.generate_content(
+            model=model,
+            contents=prompt,
+            config=GenerateContentConfig(response_mime_type="application/json")
+        )
         result = json.loads(response.text.strip())
         
         salary_range = result.get('range', 'Not Available')
@@ -629,7 +672,7 @@ Confidence scale:
         
         return salary_range, max(0.0, min(100.0, confidence))
     
-    except (json.JSONDecodeError, KeyError, ValueError, AttributeError):
+    except (json.JSONDecodeError, KeyError, ValueError, AttributeError, Exception):
         return 'Not Available', 0.0
 
 
@@ -638,16 +681,7 @@ Confidence scale:
 # ============================================================================
 
 async def check_url_reachability(url: str, timeout: float = 3.0) -> bool:
-    """
-    Async HEAD request to check if URL is reachable.
-    
-    Args:
-        url: Job posting URL
-        timeout: Request timeout in seconds
-    
-    Returns:
-        True if URL returns 200, False otherwise
-    """
+    """Async HEAD request to check if URL is reachable."""
     try:
         async with httpx.AsyncClient() as client:
             response = await client.head(url, timeout=timeout, follow_redirects=True)
@@ -657,21 +691,7 @@ async def check_url_reachability(url: str, timeout: float = 3.0) -> bool:
 
 
 def detect_ghost_job(job: JobOpportunity, job_url_reachable: bool = True) -> bool:
-    """
-    Detect ghost jobs using multiple heuristics.
-    
-    Flagging Criteria:
-    1. Stale posting: post_date > 60 days ago
-    2. URL patterns: Matches known scam domains
-    3. Unreachable links: HTTP status ≠ 200
-    
-    Args:
-        job: JobOpportunity Pydantic model
-        job_url_reachable: Result from check_url_reachability()
-    
-    Returns:
-        True if job is likely a ghost posting
-    """
+    """Detect ghost jobs using multiple heuristics."""
     # Check 1: Stale posting
     age_days = (datetime.utcnow() - job.post_date).days
     if age_days > GHOST_JOB_AGE_DAYS:
@@ -696,6 +716,7 @@ def detect_ghost_job(job: JobOpportunity, job_url_reachable: bool = True) -> boo
 async def process_job_batch(
     profile: UserProfile,
     jobs_raw: List[Dict],
+    api_key: str,
     check_urls: bool = True
 ) -> List[JobOpportunity]:
     """
@@ -703,12 +724,9 @@ async def process_job_batch(
     
     Args:
         profile: UserProfile Pydantic model
-        jobs_raw: List of raw job dictionaries with keys:
-                  {title, company, hub, url, post_date, description}
+        jobs_raw: List of raw job dictionaries
+        api_key: User provided API key
         check_urls: Whether to perform async URL reachability checks
-    
-    Returns:
-        List of JobOpportunity Pydantic models with scores
     """
     processed_jobs = []
     
@@ -729,14 +747,16 @@ async def process_job_batch(
             salary_range, confidence = infer_salary(
                 job_data['hub'],
                 job_data['title'],
-                profile.seniority
+                profile.seniority,
+                api_key
             )
         
         # Calculate scores
         match_score = calculate_match_score(
             profile.extracted_skills,
             job_data.get('description', ''),
-            profile.seniority
+            profile.seniority,
+            api_key
         )
         
         job_opportunity = JobOpportunity(
@@ -748,17 +768,18 @@ async def process_job_batch(
             is_verified_salary=is_verified,
             salary_confidence=confidence,
             match_score=match_score,
-            hire_probability=0.0,  # Placeholder, calculated next
+            hire_probability=0.0,
             url=job_data['url'],
             post_date=job_data['post_date'],
-            is_ghost_job=False  # Placeholder
+            is_ghost_job=False 
         )
         
-        # Calculate hire probability (requires JobOpportunity object)
+        # Calculate hire probability
         hire_prob = calculate_hire_probability(
             profile,
             job_opportunity,
-            job_data.get('description', '')
+            job_data.get('description', ''),
+            api_key
         )
         job_opportunity.hire_probability = hire_prob
         
@@ -775,49 +796,26 @@ async def process_job_batch(
 # UTILITY FUNCTIONS
 # ============================================================================
 
-def set_api_key(api_key: str) -> None:
-    """
-    Update Gemini API key at runtime.
-    
-    Args:
-        api_key: Google Gemini API key
-    """
-    global GEMINI_API_KEY
-    GEMINI_API_KEY = api_key
-    genai.configure(api_key=api_key)
-
-
 def test_api_key(api_key: str):
-    '''Test if the provided API key is valid by making a simple request.
-    
-    Args:
-        api_key: Google Gemini API key to test
-    
-    Returns:
-        (is_valid, message) tuple
-        is_valid: True if key works, False otherwise
-        message: Success message or error description
-    '''
+    '''Test if the provided API key is valid using client.models.list().'''
     try:
-        # Configure with test key
-        genai.configure(api_key=api_key)
+        if not api_key:
+             return False, ' API key is empty.'
+
+        client = genai.Client(api_key=api_key)
         
-        # Create a test model
-        test_model = genai.GenerativeModel('gemini-1.5-flash')
+        # Simple test: List models
+        # This confirms we can authenticate and reach the service
+        models = list(client.models.list(page_size=1))
         
-        # Simple test prompt
-        response = test_model.generate_content('Say API key is valid if you can read this.')
-        
-        # Check if we got a response
-        if response and response.text:
+        if models:
             return True, ' API key validated successfully!'
         else:
-            return False, ' API key returned empty response. Please check your key.'
+            return True, ' API key valid (no models returned via list, but auth worked).'
     
     except Exception as e:
         error_msg = str(e).lower()
         
-        # Provide specific error messages
         if 'api_key' in error_msg or 'invalid' in error_msg or 'authentication' in error_msg:
             return False, ' Invalid API key. Please check your key and try again.'
         elif 'quota' in error_msg or 'limit' in error_msg:
