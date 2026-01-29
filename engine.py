@@ -32,47 +32,126 @@ GHOST_JOB_AGE_DAYS = 60
 # MODEL MANAGEMENT
 # ============================================================================
 
-def get_best_model(api_key: str) -> str:
+def get_prioritized_models(api_key: str) -> List[str]:
     """
-    Determine the best available model for the provided API key.
-    Prioritizes: gemini-1.5-pro > gemini-1.5-flash > gemini-2.0-flash-exp
+    Return a list of available models sorted by priority.
     """
     if not api_key:
-        return 'gemini-1.5-flash'
+        return ['gemini-1.5-flash']
 
     client = genai.Client(api_key=api_key)
     try:
-        # Fetch available models
-        # client.models.list() returns an iterator of Model objects
         available_models = []
+        full_model_names = []
+        print(f"DEBUG: Listing models for key ending in ...{api_key[-4:] if api_key else 'None'}")
+        
         for m in client.models.list():
-            if 'generateContent' in m.supported_generation_methods:
-                # m.name is usually "models/model-name"
+            # Handle unified SDK attribute variations
+            supports_generation = False
+            
+            # Check for supported_generation_methods (snake_case)
+            if hasattr(m, 'supported_generation_methods'):
+                 if 'generateContent' in m.supported_generation_methods:
+                     supports_generation = True
+            # Check for supportedGenerationMethods (camelCase)
+            elif hasattr(m, 'supportedGenerationMethods'):
+                 if 'generateContent' in m.supportedGenerationMethods:
+                     supports_generation = True
+            # Fallback: Assume Gemini models support generation if we can't tell
+            elif 'gemini' in m.name:
+                supports_generation = True
+                
+            if supports_generation:
+                full_model_names.append(m.name)
                 name = m.name.replace('models/', '')
                 available_models.append(name)
 
         priority_queue = [
+            'gemini-3-flash',
+            'gemini-2.5-pro',
+            'gemini-1.5-flash-latest',
             'gemini-1.5-pro',
             'gemini-1.5-flash',
-            'gemini-2.0-flash-exp'
+            'gemini-1.5-flash-001',
+            'gemini-1.5-flash-002',
+            'gemini-2.0-flash-exp',
+            'gemini-pro',
+            'gemini-1.0-pro'
         ]
 
+        # Build prioritized list of usable models
+        usable_models = []
+        
+        # 1. Add priority matches
         for model in priority_queue:
             if model in available_models:
-                return model
+                usable_models.append(model)
         
-        return 'gemini-1.5-flash' # Default fallback
+            # Try full name variant
+            full_target = f"models/{model}"
+            if full_target in full_model_names:
+                usable_models.append(full_target)
+
+        # 2. Add remaining Gemini models
+        for m in available_models:
+            if 'gemini' in m and m not in usable_models:
+                usable_models.append(m)
+
+        # 3. Add absolute fallback
+        if not usable_models and available_models:
+            usable_models.append(available_models[0])
+            
+        if not usable_models:
+            return ['gemini-1.5-flash']
+            
+        return usable_models
         
     except Exception as e:
-        print(f"Model list failed: {e}")
-        return 'gemini-1.5-flash'
+        print(f"ERROR: Model list failed: {e}")
+        return ['gemini-1.5-flash']
 
-def _generate_json_content(client: genai.Client, model: str, prompt: str) -> Optional[Dict]:
-    """Helper to generate JSON content safely."""
+
+def get_best_model(api_key: str) -> str:
+    """Wrapper to get just the top model (for backward compatibility)."""
+    models = get_prioritized_models(api_key)
+    return models[0] if models else 'gemini-1.5-flash'
+
+
+def generate_with_retry(client: genai.Client, prompt: str, api_key: str, config=None) -> Any:
+    """
+    Attempt generation with the best model, falling back to others on quota error (429).
+    """
+    candidates = get_prioritized_models(api_key)
+    last_error = None
+    
+    for model in candidates:
+        try:
+            print(f"DEBUG: Attempting generation with {model}...")
+            if config:
+                return client.models.generate_content(model=model, contents=prompt, config=config)
+            else:
+                return client.models.generate_content(model=model, contents=prompt)
+        except Exception as e:
+            error_str = str(e)
+            if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
+                print(f"WARN: Quota exceeded for {model}. Falling back to next candidate...")
+                last_error = e
+                continue
+            else:
+                # Non-quota error (e.g. block refusal), don't retry extensively
+                raise e
+    
+    if last_error:
+        raise last_error
+    raise ValueError("No models available for generation.")
+
+def _generate_json_content(client: genai.Client, prompt: str, api_key: str) -> Optional[Dict]:
+    """Helper to generate JSON content safely using retry logic."""
     try:
-        response = client.models.generate_content(
-            model=model,
-            contents=prompt,
+        response = generate_with_retry(
+            client=client,
+            prompt=prompt,
+            api_key=api_key,
             config=GenerateContentConfig(response_mime_type="application/json")
         )
         return json.loads(response.text.strip())
@@ -547,7 +626,8 @@ def calculate_hire_probability(
     Calculate Hiring Probability (0-100).
     """
     client = genai.Client(api_key=api_key)
-    model = get_best_model(api_key)
+    client = genai.Client(api_key=api_key)
+    # model = get_best_model(api_key)
 
     skills_str = ', '.join(profile.extracted_skills)
     
@@ -578,9 +658,10 @@ Return ONLY valid JSON:
 """
     
     try:
-        response = client.models.generate_content(
-            model=model,
-            contents=prompt,
+        response = generate_with_retry(
+            client=client,
+            prompt=prompt,
+            api_key=api_key,
             config=GenerateContentConfig(response_mime_type="application/json")
         )
         result = json.loads(response.text.strip())
@@ -633,7 +714,8 @@ def infer_salary(hub: str, title: str, seniority: str, api_key: str) -> Tuple[st
     Infer salary range using Gemini when explicit salary is missing.
     """
     client = genai.Client(api_key=api_key)
-    model = get_best_model(api_key)
+    client = genai.Client(api_key=api_key)
+    # model = get_best_model(api_key)
 
     prompt = f"""
 Estimate 2026 salary range for:
@@ -660,9 +742,10 @@ Confidence scale:
 """
     
     try:
-        response = client.models.generate_content(
-            model=model,
-            contents=prompt,
+        response = generate_with_retry(
+            client=client,
+            prompt=prompt,
+            api_key=api_key,
             config=GenerateContentConfig(response_mime_type="application/json")
         )
         result = json.loads(response.text.strip())
