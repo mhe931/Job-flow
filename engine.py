@@ -785,3 +785,46 @@ def set_api_key(api_key: str) -> None:
     global GEMINI_API_KEY
     GEMINI_API_KEY = api_key
     genai.configure(api_key=api_key)
+
+
+def test_api_key(api_key: str):
+    '''Test if the provided API key is valid by making a simple request.
+    
+    Args:
+        api_key: Google Gemini API key to test
+    
+    Returns:
+        (is_valid, message) tuple
+        is_valid: True if key works, False otherwise
+        message: Success message or error description
+    '''
+    try:
+        # Configure with test key
+        genai.configure(api_key=api_key)
+        
+        # Create a test model
+        test_model = genai.GenerativeModel('gemini-1.5-flash')
+        
+        # Simple test prompt
+        response = test_model.generate_content('Say API key is valid if you can read this.')
+        
+        # Check if we got a response
+        if response and response.text:
+            return True, ' API key validated successfully!'
+        else:
+            return False, ' API key returned empty response. Please check your key.'
+    
+    except Exception as e:
+        error_msg = str(e).lower()
+        
+        # Provide specific error messages
+        if 'api_key' in error_msg or 'invalid' in error_msg or 'authentication' in error_msg:
+            return False, ' Invalid API key. Please check your key and try again.'
+        elif 'quota' in error_msg or 'limit' in error_msg:
+            return False, ' API quota exceeded. Please check your Google AI Studio quota.'
+        elif 'permission' in error_msg or 'forbidden' in error_msg:
+            return False, ' Permission denied. Ensure your API key has Gemini API access enabled.'
+        elif 'network' in error_msg or 'connection' in error_msg:
+            return False, ' Network error. Please check your internet connection.'
+        else:
+            return False, f' API key test failed: {str(e)}'

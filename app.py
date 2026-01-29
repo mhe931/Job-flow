@@ -373,13 +373,13 @@ if 'current_session_id' not in st.session_state:
 if 'jobs' not in st.session_state:
     st.session_state.jobs = []
 
+# Ingestion flow state machine
+if 'ingestion_step' not in st.session_state:
+    st.session_state.ingestion_step = 'input'  # 'input' | 'verify' | 'analyzing' | 'complete'
+
 # UI state for resume ingestion
 if 'show_full_text' not in st.session_state:
     st.session_state.show_full_text = False
-if 'trigger_analysis' not in st.session_state:
-    st.session_state.trigger_analysis = False
-if 'edit_mode' not in st.session_state:
-    st.session_state.edit_mode = False
 if 'normalized_text' not in st.session_state:
     st.session_state.normalized_text = None
 if 'extracted_text' not in st.session_state:
@@ -468,6 +468,42 @@ def export_to_excel(jobs: List[JobOpportunity]) -> bytes:
             worksheet.column_dimensions[column[0].column_letter].width = adjusted_width
     
     return output.getvalue()
+
+
+# ============================================================================
+# CALLBACK FUNCTIONS FOR UI INTERACTIONS
+# ============================================================================
+
+def on_show_full_toggle():
+    """Callback for 'Show full text' checkbox toggle."""
+    st.session_state.show_full_text = st.session_state.show_full_checkbox
+
+
+def on_confirm_analyze():
+    """Callback for 'Confirm & Analyze' button."""
+    st.session_state.ingestion_step = 'analyzing'
+
+
+def on_edit_text():
+    """Callback for 'Edit Text' button."""
+    st.session_state.ingestion_step = 'input'
+    st.session_state.extracted_text = None
+    st.session_state.normalized_text = None
+
+
+def on_discard_restart():
+    """Callback for 'Discard & Restart' button."""
+    keys_to_clear = [
+        'profile', 'normalized_text', 'extracted_text', 
+        'source_type', 'show_full_text'
+    ]
+    for key in keys_to_clear:
+        if key in st.session_state:
+            if key == 'show_full_text':
+                st.session_state[key] = False
+            else:
+                st.session_state[key] = None
+    st.session_state.ingestion_step = 'input'
 
 
 # ============================================================================
@@ -614,19 +650,69 @@ def page_login():
         
         if submitted:
             if api_key and user_email:
-                # Set API key
-                set_api_key(api_key)
+                # Test API key first
+                with st.spinner("🔍 Validating API key..."):
+                    from engine import test_api_key
+                    is_valid, message = test_api_key(api_key)
                 
-                # Create mock user ID (replace with real OAuth in production)
-                user_id = f"user_{hash(user_email)}"
-                
-                st.session_state.authenticated = True
-                st.session_state.user_id = user_id
-                st.session_state.user_email = user_email
-                st.session_state.api_key = api_key
-                
-                st.success("✅ Authenticated! Redirecting...")
-                st.rerun()
+                if is_valid:
+                    # Set API key
+                    set_api_key(api_key)
+                    
+                    # Create mock user ID (replace with real OAuth in production)
+                    user_id = f"user_{hash(user_email)}"
+                    
+                    st.session_state.authenticated = True
+                    st.session_state.user_id = user_id
+                    st.session_state.user_email = user_email
+                    st.session_state.api_key = api_key
+                    
+                    st.success(message)
+                    st.success("✅ Authenticated! Redirecting...")
+                    st.rerun()
+                else:
+                    # Show error message
+                    st.error(message)
+                    
+                    # Provide guidance based on error type
+                    if "Invalid" in message or "authentication" in message.lower():
+                        st.markdown("""
+                        <div style="
+                            background: rgba(244, 67, 54, 0.1);
+                            border-left: 4px solid #F44336;
+                            padding: 1rem;
+                            border-radius: 8px;
+                            margin: 1rem 0;
+                        ">
+                            <p style="margin: 0; color: #B0BEC5; font-size: 0.95rem;">
+                                <strong style="color: #F44336;">🔧 How to fix this:</strong><br>
+                                1. Go to <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color: #42A5F5;">Google AI Studio</a><br>
+                                2. Click "Create API Key"<br>
+                                3. Copy the key and paste it above<br>
+                                4. Make sure you're using a <strong>Gemini API key</strong>, not a Google Cloud API key
+                            </p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    elif "quota" in message.lower():
+                        st.markdown("""
+                        <div style="
+                            background: rgba(255, 152, 0, 0.1);
+                            border-left: 4px solid #FF9800;
+                            padding: 1rem;
+                            border-radius: 8px;
+                            margin: 1rem 0;
+                        ">
+                            <p style="margin: 0; color: #B0BEC5; font-size: 0.95rem;">
+                                <strong style="color: #FF9800;">📊 Quota Issue:</strong><br>
+                                Your API key has exceeded its quota. Check your usage at 
+                                <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color: #42A5F5;">Google AI Studio</a>.
+                                <br><br>
+                                Free tier limits: 15 requests/minute, 1,500 requests/day
+                            </p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    elif "network" in message.lower():
+                        st.info("💡 **Tip:** Check your internet connection and try again.")
             else:
                 st.error("❌ Please provide both API key and email.")
     
@@ -690,115 +776,133 @@ def page_upload_resume():
     from engine import ingest_text, ingest_file, ingest_url, normalize_to_markdown
     import asyncio
     
-    # Tabbed interface
-    tab1, tab2, tab3 = st.tabs(["⚡ Fast Paste", "☁️ Cloud Sync", "💾 Local Asset"])
-    
-    extracted_text = None
-    source_type = None
-    
-    # ========== TAB 1: TEXT INPUT ==========
-    with tab1:
-        st.subheader("Paste Resume Text")
-        text_input = st.text_area(
-            "Paste your resume here",
-            height=300,
-            placeholder="Paste your resume text directly...",
-            key="text_input_area"
-        )
+    # Only show input tabs if in 'input' step
+    if st.session_state.ingestion_step == 'input':
+        # Tabbed interface
+        tab1, tab2, tab3 = st.tabs(["⚡ Fast Paste", "☁️ Cloud Sync", "💾 Local Asset"])
         
-        if st.button("Process Text", key="btn_text", type="primary"):
-            try:
-                extracted_text = ingest_text(text_input)
-                source_type = "text"
-                st.success("✅ Text processed successfully")
-            except ValueError as e:
-                st.error(f"❌ {str(e)}")
-    
-    # ========== TAB 2: URL INPUT ==========
-    with tab2:
-        st.subheader("Import from URL")
-        st.markdown("""
-        **Supported sources:**
-        - 🌐 Web portfolios (HTML pages)
-        - 📄 Direct PDF links
-        - 📝 Google Docs (must be publicly accessible)
-        """)
+        # ========== TAB 1: TEXT INPUT ==========
+        with tab1:
+            st.subheader("Paste Resume Text")
+            text_input = st.text_area(
+                "Paste your resume here",
+                height=300,
+                placeholder="Paste your resume text directly...",
+                key="text_input_area"
+            )
+            
+            if st.button("Process Text", key="btn_text", type="primary"):
+                if text_input and text_input.strip():
+                    try:
+                        extracted_text = ingest_text(text_input)
+                        # Store in session state immediately
+                        st.session_state.extracted_text = extracted_text
+                        st.session_state.source_type = "text"
+                        st.session_state.ingestion_step = 'verify'
+                        st.success("✅ Text processed successfully")
+                        st.rerun()
+                    except ValueError as e:
+                        st.error(f"❌ {str(e)}")
+                else:
+                    st.warning("Please paste some text first.")
         
-        url_input = st.text_input(
-            "Enter URL",
-            placeholder="https://example.com/resume.pdf or https://docs.google.com/document/d/...",
-            key="url_input_field"
-        )
+        # ========== TAB 2: URL INPUT ==========
+        with tab2:
+            st.subheader("Import from URL")
+            st.markdown("""
+            **Supported sources:**
+            - 🌐 Web portfolios (HTML pages)
+            - 📄 Direct PDF links
+            - 📝 Google Docs (must be publicly accessible)
+            """)
+            
+            url_input = st.text_input(
+                "Enter URL",
+                placeholder="https://example.com/resume.pdf or https://docs.google.com/document/d/...",
+                key="url_input_field"
+            )
+            
+            if st.button("Fetch from URL", key="btn_url", type="primary"):
+                if url_input:
+                    try:
+                        with st.spinner("Fetching content from URL..."):
+                            # Run async function
+                            extracted_text = asyncio.run(ingest_url(url_input))
+                            # Store in session state immediately
+                            st.session_state.extracted_text = extracted_text
+                            st.session_state.source_type = "url"
+                            st.session_state.ingestion_step = 'verify'
+                        st.success("✅ Content fetched successfully")
+                        st.rerun()
+                    except ValueError as e:
+                        st.error(f"❌ {str(e)}")
+                        
+                        # Provide recovery suggestions
+                        if "timeout" in str(e).lower():
+                            st.info("💡 **Suggestion:** The URL might be slow. Try downloading the file and uploading it in the 'Local Asset' tab.")
+                        elif "403" in str(e) or "not publicly accessible" in str(e).lower():
+                            st.info("💡 **Suggestion:** For Google Docs, go to Share → Change to 'Anyone with the link can view'")
+                        elif "network" in str(e).lower():
+                            st.info("💡 **Suggestion:** Check your internet connection or try pasting the content directly in the 'Fast Paste' tab.")
+                else:
+                    st.warning("Please enter a URL first.")
         
-        if st.button("Fetch from URL", key="btn_url", type="primary"):
-            if url_input:
+        # ========== TAB 3: FILE UPLOAD ==========
+        with tab3:
+            st.subheader("Upload Local File")
+            st.markdown("**Supported formats:** PDF, DOCX (max 10MB)")
+            
+            uploaded_file = st.file_uploader(
+                "Choose PDF or DOCX",
+                type=['pdf', 'docx'],
+                help="Maximum file size: 10MB",
+                key="file_uploader"
+            )
+            
+            # Password input for encrypted PDFs
+            pdf_password = None
+            if uploaded_file and uploaded_file.name.endswith('.pdf'):
+                with st.expander("🔒 PDF Password (if encrypted)"):
+                    pdf_password = st.text_input("Enter password", type="password", key="pdf_password")
+            
+            if uploaded_file and st.button("Extract Text", key="btn_file", type="primary"):
                 try:
-                    with st.spinner("Fetching content from URL..."):
-                        # Run async function
-                        extracted_text = asyncio.run(ingest_url(url_input))
-                        source_type = "url"
-                    st.success("✅ Content fetched successfully")
+                    # Check file size
+                    if uploaded_file.size > 10 * 1024 * 1024:
+                        st.error("❌ File exceeds 10MB limit")
+                        st.info("💡 **Suggestion:** Try compressing the PDF or converting to a lighter format.")
+                    else:
+                        with st.spinner(f"Extracting text from {uploaded_file.name}..."):
+                            extracted_text = ingest_file(uploaded_file, pdf_password)
+                            # Store in session state immediately
+                            st.session_state.extracted_text = extracted_text
+                            st.session_state.source_type = "file"
+                            st.session_state.ingestion_step = 'verify'
+                        st.success(f"✅ Text extracted from {uploaded_file.name}")
+                        st.rerun()
                 except ValueError as e:
                     st.error(f"❌ {str(e)}")
                     
                     # Provide recovery suggestions
-                    if "timeout" in str(e).lower():
-                        st.info("💡 **Suggestion:** The URL might be slow. Try downloading the file and uploading it in the 'Local Asset' tab.")
-                    elif "403" in str(e) or "not publicly accessible" in str(e).lower():
-                        st.info("💡 **Suggestion:** For Google Docs, go to Share → Change to 'Anyone with the link can view'")
-                    elif "network" in str(e).lower():
-                        st.info("💡 **Suggestion:** Check your internet connection or try pasting the content directly in the 'Fast Paste' tab.")
-            else:
-                st.warning("Please enter a URL first.")
-    
-    # ========== TAB 3: FILE UPLOAD ==========
-    with tab3:
-        st.subheader("Upload Local File")
-        st.markdown("**Supported formats:** PDF, DOCX (max 10MB)")
-        
-        uploaded_file = st.file_uploader(
-            "Choose PDF or DOCX",
-            type=['pdf', 'docx'],
-            help="Maximum file size: 10MB",
-            key="file_uploader"
-        )
-        
-        # Password input for encrypted PDFs
-        pdf_password = None
-        if uploaded_file and uploaded_file.name.endswith('.pdf'):
-            with st.expander("🔒 PDF Password (if encrypted)"):
-                pdf_password = st.text_input("Enter password", type="password", key="pdf_password")
-        
-        if uploaded_file and st.button("Extract Text", key="btn_file", type="primary"):
-            try:
-                # Check file size
-                if uploaded_file.size > 10 * 1024 * 1024:
-                    st.error("❌ File exceeds 10MB limit")
-                    st.info("💡 **Suggestion:** Try compressing the PDF or converting to a lighter format.")
-                else:
-                    with st.spinner(f"Extracting text from {uploaded_file.name}..."):
-                        extracted_text = ingest_file(uploaded_file, pdf_password)
-                        source_type = "file"
-                    st.success(f"✅ Text extracted from {uploaded_file.name}")
-            except ValueError as e:
-                st.error(f"❌ {str(e)}")
-                
-                # Provide recovery suggestions
-                if "password" in str(e).lower():
-                    st.info("💡 **Suggestion:** Enter the PDF password in the field above and try again.")
-                elif "unsupported format" in str(e).lower():
-                    st.info("💡 **Suggestion:** Only PDF and DOCX files are supported. Convert your file or paste the text directly.")
-                elif "readable text" in str(e).lower():
-                    st.info("💡 **Suggestion:** The file might be scanned/image-based. Try using OCR or paste the text manually.")
+                    if "password" in str(e).lower():
+                        st.info("💡 **Suggestion:** Enter the PDF password in the field above and try again.")
+                    elif "unsupported format" in str(e).lower():
+                        st.info("💡 **Suggestion:** Only PDF and DOCX files are supported. Convert your file or paste the text directly.")
+                    elif "readable text" in str(e).lower():
+                        st.info("💡 **Suggestion:** The file might be scanned/image-based. Try using OCR or paste the text manually.")
     
     # ========== VERIFICATION STEP ==========
-    if extracted_text:
+    if st.session_state.ingestion_step in ['verify', 'analyzing', 'complete'] and st.session_state.extracted_text:
         st.divider()
         st.subheader("🔍 Verification Step")
         st.markdown("Review the extracted content before analysis.")
         
-        # Normalize text
-        normalized_text = normalize_to_markdown(extracted_text)
+        # Normalize text (only once)
+        if not st.session_state.normalized_text:
+            normalized_text = normalize_to_markdown(st.session_state.extracted_text)
+            st.session_state.normalized_text = normalized_text
+        else:
+            normalized_text = st.session_state.normalized_text
         
         # Display preview in expander
         with st.expander("📝 Preview Extracted Text", expanded=True):
@@ -815,16 +919,13 @@ def page_upload_resume():
                 disabled=True
             )
             
-            # Show full text option - Fixed with session state
-            show_full = st.checkbox(
+            # Show full text option - Fixed with callback
+            st.checkbox(
                 "Show full text", 
-                key="show_full",
-                value=st.session_state.show_full_text
+                key="show_full_checkbox",
+                value=st.session_state.show_full_text,
+                on_change=on_show_full_toggle
             )
-            
-            # Update session state when checkbox changes
-            if show_full != st.session_state.show_full_text:
-                st.session_state.show_full_text = show_full
             
             if st.session_state.show_full_text:
                 st.text_area(
@@ -857,69 +958,71 @@ def page_upload_resume():
             "url": "☁️ Cloud URL",
             "file": "💾 Local File"
         }
-        if source_type:
-            st.info(f"**Source:** {source_icons.get(source_type, 'Unknown')}")
+        if st.session_state.source_type:
+            st.info(f"**Source:** {source_icons.get(st.session_state.source_type, 'Unknown')}")
         
         st.divider()
         
-        # Action buttons
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            if st.button("✅ Confirm & Analyze", type="primary", key="btn_confirm", use_container_width=True):
-                # Store normalized text in session state
-                st.session_state.normalized_text = normalized_text
-                st.session_state.trigger_analysis = True
+        # Action buttons with callbacks - only show if not analyzing or complete
+        if st.session_state.ingestion_step == 'verify':
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.button(
+                    "✅ Confirm & Analyze", 
+                    type="primary", 
+                    key="btn_confirm", 
+                    use_container_width=True,
+                    on_click=on_confirm_analyze
+                )
+            
+            with col2:
+                st.button(
+                    "✏️ Edit Text", 
+                    key="btn_edit", 
+                    use_container_width=True,
+                    on_click=on_edit_text
+                )
+            
+            with col3:
+                st.button(
+                    "🗑️ Discard & Restart", 
+                    key="btn_discard", 
+                    use_container_width=True,
+                    on_click=on_discard_restart
+                )
+    
+    # ========== ANALYSIS EXECUTION ==========
+    if st.session_state.ingestion_step == 'analyzing' and st.session_state.normalized_text:
+        with st.spinner("Analyzing resume with Gemini Flash..."):
+            try:
+                skills, seniority = analyze_profile(st.session_state.normalized_text)
                 
-        # Execute analysis if triggered (outside button to persist across reruns)
-        if st.session_state.get('trigger_analysis', False) and st.session_state.normalized_text:
-            with st.spinner("Analyzing resume with Gemini Flash..."):
-                try:
-                    skills, seniority = analyze_profile(st.session_state.normalized_text)
-                    
-                    profile = UserProfile(
-                        user_id=st.session_state.user_id,
-                        raw_text=st.session_state.normalized_text,
-                        extracted_skills=skills,
-                        seniority=seniority
-                    )
-                    
-                    st.session_state.profile = profile
-                    
-                    # Save to database
-                    save_user(profile, st.session_state.user_email, st.session_state.api_key)
-                    
-                    st.success(f"✅ Profile analyzed! Seniority: **{seniority}**")
-                    st.write(f"**Extracted Skills:** {', '.join(skills)}")
-                    
-                    st.info("✨ Proceed to **'Edit Matrix'** in the sidebar to generate your search strategy.")
-                    
-                    # Clear trigger flag
-                    st.session_state.trigger_analysis = False
+                profile = UserProfile(
+                    user_id=st.session_state.user_id,
+                    raw_text=st.session_state.normalized_text,
+                    extracted_skills=skills,
+                    seniority=seniority
+                )
                 
-                except Exception as e:
-                    st.error(f"❌ Analysis failed: {e}")
-                    st.info("💡 **Suggestion:** Check your API key or try with a different resume format.")
-                    st.session_state.trigger_analysis = False
-        
-        with col2:
-            if st.button("✏️ Edit Text", key="btn_edit", use_container_width=True):
-                # Clear extracted text to return to input mode
-                st.session_state.extracted_text = None
-                st.session_state.edit_mode = True
-                st.rerun()
-        
-        with col3:
-            if st.button("🗑️ Discard & Restart", key="btn_discard", use_container_width=True):
-                # Clear all ingestion-related state
-                keys_to_clear = [
-                    'profile', 'normalized_text', 'extracted_text', 
-                    'source_type', 'trigger_analysis', 'show_full_text', 'edit_mode'
-                ]
-                for key in keys_to_clear:
-                    if key in st.session_state:
-                        st.session_state[key] = None if key in ['normalized_text', 'extracted_text', 'source_type', 'profile'] else False
-                st.rerun()
+                st.session_state.profile = profile
+                
+                # Save to database
+                save_user(profile, st.session_state.user_email, st.session_state.api_key)
+                
+                st.success(f"✅ Profile analyzed! Seniority: **{seniority}**")
+                st.write(f"**Extracted Skills:** {', '.join(skills)}")
+                
+                st.info("✨ Proceed to **'Edit Matrix'** in the sidebar to generate your search strategy.")
+                
+                # Mark as complete
+                st.session_state.ingestion_step = 'complete'
+            
+            except Exception as e:
+                st.error(f"❌ Analysis failed: {e}")
+                st.info("💡 **Suggestion:** Check your API key or try with a different resume format.")
+                # Return to verify step on error
+                st.session_state.ingestion_step = 'verify'
 
 
 

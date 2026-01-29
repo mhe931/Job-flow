@@ -2,10 +2,6 @@
 showSidebarNavigation = false
 toolbarMode = "minimal"
 
-[ui]
-hideTopBar = false
-hideSidebarNav = true
-
 [server]
 enableCORS = false
 enableXsrfProtection = false
@@ -16,3 +12,4 @@ primaryColor = "#4CAF50"
 backgroundColor = "#0A0E14"
 secondaryBackgroundColor = "#1a1f2e"
 textColor = "#FAFAFA"
+
