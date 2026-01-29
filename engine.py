@@ -36,6 +36,278 @@ GHOST_JOB_AGE_DAYS = 60
 
 
 # ============================================================================
+# UNIVERSAL INGESTOR - MULTI-MODAL RESUME INGESTION
+# ============================================================================
+
+import PyPDF2
+import pdfplumber
+from docx import Document
+from bs4 import BeautifulSoup
+import bleach
+from io import BytesIO
+
+
+def ingest_text(raw_input: str) -> str:
+    """
+    Process direct text input.
+    
+    Args:
+        raw_input: Raw string from st.text_area
+        
+    Returns:
+        Clean UTF-8 string
+        
+    Raises:
+        ValueError: If input is empty or too short (<100 chars)
+    """
+    # Strip whitespace
+    text = raw_input.strip()
+    
+    # Normalize line endings
+    text = text.replace('\r\n', '\n')
+    
+    # Validate minimum length
+    if len(text) < 100:
+        raise ValueError("Resume must be at least 100 characters")
+        
+    return text
+
+
+def ingest_file(uploaded_file, password: Optional[str] = None) -> str:
+    """
+    Extract text from PDF or DOCX files.
+    
+    Args:
+        uploaded_file: Streamlit UploadedFile object
+        password: Optional password for encrypted PDFs
+        
+    Returns:
+        Extracted text content
+        
+    Raises:
+        ValueError: Unsupported format, corrupted file, or password required
+    """
+    file_extension = uploaded_file.name.split('.')[-1].lower()
+    
+    if file_extension == 'pdf':
+        return _extract_pdf(uploaded_file, password)
+    elif file_extension == 'docx':
+        return _extract_docx(uploaded_file)
+    else:
+        raise ValueError(f"Unsupported format: .{file_extension}. Only PDF and DOCX allowed.")
+
+
+def _extract_pdf(file, password: Optional[str] = None) -> str:
+    """Extract text from PDF file."""
+    try:
+        reader = PyPDF2.PdfReader(file)
+        
+        # Check if encrypted
+        if reader.is_encrypted:
+            if password:
+                reader.decrypt(password)
+            else:
+                raise ValueError("PDF is password-protected. Please provide password.")
+        
+        # Extract text from all pages
+        text = ""
+        for page in reader.pages:
+            text += page.extract_text() + "\n"
+            
+        # Fallback to pdfplumber if PyPDF2 fails
+        if len(text.strip()) < 50:
+            file.seek(0)
+            with pdfplumber.open(file) as pdf:
+                text = "\n".join(page.extract_text() or "" for page in pdf.pages)
+                
+        if len(text.strip()) < 50:
+            raise ValueError("Could not extract readable text from PDF")
+            
+        return text.strip()
+        
+    except Exception as e:
+        if "password" in str(e).lower():
+            raise ValueError("PDF is password-protected. Please provide password.")
+        raise ValueError(f"Failed to extract PDF: {str(e)}")
+
+
+def _extract_docx(file) -> str:
+    """Extract text from DOCX file."""
+    try:
+        doc = Document(file)
+        text = "\n".join(paragraph.text for paragraph in doc.paragraphs)
+        
+        if len(text.strip()) < 50:
+            raise ValueError("Could not extract readable text from DOCX")
+            
+        return text.strip()
+    except Exception as e:
+        raise ValueError(f"Failed to extract DOCX: {str(e)}")
+
+
+async def ingest_url(url: str) -> str:
+    """
+    Fetch and extract text from URLs (web pages, PDFs, Google Docs).
+    
+    Args:
+        url: URL to fetch
+        
+    Returns:
+        Extracted text content
+        
+    Raises:
+        ValueError: Invalid URL, unreachable, or unsupported content
+    """
+    # Validate and sanitize URL
+    validated_url = _validate_url(url)
+    
+    # Detect URL type
+    url_type = _detect_url_type(validated_url)
+    
+    # Route to appropriate extractor
+    if url_type == "google_docs":
+        return await _fetch_google_docs(validated_url)
+    elif url_type == "pdf":
+        return await _fetch_pdf_url(validated_url)
+    else:  # web page
+        return await _fetch_web_page(validated_url)
+
+
+def _validate_url(url: str) -> str:
+    """Validate and sanitize URL."""
+    parsed = urlparse(url)
+    
+    # Reject dangerous schemes
+    if parsed.scheme not in ['http', 'https']:
+        raise ValueError(f"Unsupported URL scheme: {parsed.scheme}. Only HTTP/HTTPS allowed.")
+    
+    # Remove tracking parameters
+    clean_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+    if parsed.query:
+        # Keep only essential params (e.g., Google Docs ID)
+        clean_url += f"?{parsed.query}"
+        
+    return clean_url
+
+
+def _detect_url_type(url: str) -> str:
+    """Detect URL content type."""
+    if "docs.google.com" in url:
+        return "google_docs"
+    elif url.lower().endswith('.pdf'):
+        return "pdf"
+    else:
+        return "web_page"
+
+
+async def _fetch_web_page(url: str) -> str:
+    """Fetch and extract text from HTML page."""
+    async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
+        try:
+            response = await client.get(
+                url,
+                headers={"User-Agent": "JobFlowAI/2.0 (Resume Parser)"}
+            )
+            response.raise_for_status()
+            
+            # Parse HTML
+            soup = BeautifulSoup(response.content, 'html.parser')
+            
+            # Remove script and style tags
+            for tag in soup(['script', 'style', 'iframe', 'nav', 'footer', 'header']):
+                tag.decompose()
+            
+            # Extract text
+            text = soup.get_text(separator='\n', strip=True)
+            
+            if len(text.strip()) < 100:
+                raise ValueError("Insufficient content extracted from webpage")
+                
+            return text
+            
+        except httpx.TimeoutException:
+            raise ValueError(f"URL timeout after 5 seconds: {url}")
+        except httpx.HTTPStatusError as e:
+            raise ValueError(f"HTTP {e.response.status_code}: Could not fetch URL")
+        except Exception as e:
+            raise ValueError(f"Network error: {str(e)}")
+
+
+async def _fetch_pdf_url(url: str) -> str:
+    """Download PDF from URL and extract text."""
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        try:
+            response = await client.get(url)
+            response.raise_for_status()
+            
+            # Create in-memory file-like object
+            pdf_file = BytesIO(response.content)
+            
+            # Use existing PDF extractor
+            return _extract_pdf(pdf_file)
+            
+        except Exception as e:
+            raise ValueError(f"Failed to download PDF: {str(e)}")
+
+
+async def _fetch_google_docs(url: str) -> str:
+    """
+    Extract text from Google Docs.
+    Note: Requires document to be publicly accessible.
+    """
+    # Extract document ID
+    match = re.search(r'/document/d/([a-zA-Z0-9-_]+)', url)
+    if not match:
+        raise ValueError("Invalid Google Docs URL")
+    
+    doc_id = match.group(1)
+    
+    # Use export URL for plain text
+    export_url = f"https://docs.google.com/document/d/{doc_id}/export?format=txt"
+    
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        try:
+            response = await client.get(export_url)
+            response.raise_for_status()
+            
+            text = response.text.strip()
+            
+            if len(text) < 100:
+                raise ValueError("Insufficient content extracted from Google Doc")
+                
+            return text
+            
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 403:
+                raise ValueError("Document not publicly accessible. Please adjust sharing settings.")
+            raise ValueError(f"Failed to fetch Google Doc: HTTP {e.response.status_code}")
+
+
+def normalize_to_markdown(raw_text: str) -> str:
+    """
+    Normalize extracted text to clean Markdown format.
+    
+    Args:
+        raw_text: Text from any ingestion handler
+        
+    Returns:
+        Clean Markdown-formatted text
+    """
+    # Remove excessive whitespace
+    text = re.sub(r'\n{3,}', '\n\n', raw_text)
+    
+    # Normalize bullet points
+    text = re.sub(r'^[\u2022\u25CF\u25E6]\s+', '- ', text, flags=re.MULTILINE)
+    
+    # Remove HTML if present
+    text = bleach.clean(text, tags=[], strip=True)
+    
+    # Trim
+    return text.strip()
+
+
+
+# ============================================================================
 # PROFILE ANALYZER
 # ============================================================================
 

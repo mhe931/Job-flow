@@ -9,8 +9,8 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2
-from sqlalchemy import create_engine, desc
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from sqlalchemy import create_engine, desc, text
 from sqlalchemy.orm import sessionmaker, Session as DBSession
 from models import Base, User, Session, DiscoveredJob, UserProfile, SearchMatrix, JobOpportunity
 
@@ -43,22 +43,22 @@ def init_db() -> None:
     
     # Create indexes for performance
     with engine.connect() as conn:
-        conn.execute("""
+        conn.execute(text("""
             CREATE INDEX IF NOT EXISTS idx_sessions_user_id 
             ON sessions(user_id)
-        """)
-        conn.execute("""
+        """))
+        conn.execute(text("""
             CREATE INDEX IF NOT EXISTS idx_jobs_session_id 
             ON discovered_jobs(session_id)
-        """)
-        conn.execute("""
+        """))
+        conn.execute(text("""
             CREATE INDEX IF NOT EXISTS idx_jobs_hire_probability 
             ON discovered_jobs(hire_probability DESC)
-        """)
-        conn.execute("""
+        """))
+        conn.execute(text("""
             CREATE INDEX IF NOT EXISTS idx_jobs_clicked_at 
             ON discovered_jobs(clicked_at)
-        """)
+        """))
         conn.commit()
 
 
@@ -68,7 +68,7 @@ def init_db() -> None:
 
 def _derive_key(user_id: str) -> bytes:
     """Derive encryption key from user_id using PBKDF2."""
-    kdf = PBKDF2(
+    kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
         length=32,
         salt=ENCRYPTION_MASTER_KEY.encode()[:16],

@@ -33,48 +33,111 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Dark mode CSS
+# Dark mode CSS with Liquid Glass aesthetic
 st.markdown("""
 <style>
-    /* Dark mode theme */
+    /* ============================================
+       LIQUID GLASS DESIGN SYSTEM
+       ============================================ */
+    
+    /* Base Layer - Deep Space Background */
     .stApp {
-        background-color: #0E1117;
+        background: linear-gradient(135deg, #0A0E14 0%, #0f1419 50%, #1a1f2e 100%);
         color: #FAFAFA;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
     }
     
-    /* Job card styling */
+    /* Add subtle noise texture */
+    .stApp::before {
+        content: '';
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+        opacity: 0.03;
+        pointer-events: none;
+        z-index: 1;
+    }
+    
+    /* Glass Card Base */
+    .glass-card {
+        background: rgba(30, 37, 48, 0.7) !important;
+        backdrop-filter: blur(20px) saturate(180%);
+        -webkit-backdrop-filter: blur(20px) saturate(180%);
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        border-radius: 16px !important;
+        box-shadow: 
+            0 8px 32px 0 rgba(0, 0, 0, 0.37),
+            inset 0 1px 0 0 rgba(255, 255, 255, 0.05) !important;
+        transition: all 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+    }
+    
+    /* Enhanced Job Cards */
     .job-card {
-        background: linear-gradient(135deg, #1E2530 0%, #252D3A 100%);
-        border-radius: 12px;
-        padding: 20px;
-        margin: 15px 0;
+        background: rgba(30, 37, 48, 0.7);
+        backdrop-filter: blur(20px) saturate(180%);
+        -webkit-backdrop-filter: blur(20px) saturate(180%);
+        border-radius: 16px;
+        padding: 24px;
+        margin: 16px 0;
+        border: 1px solid rgba(255, 255, 255, 0.1);
         border-left: 4px solid #4CAF50;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
-        transition: all 0.3s ease;
+        box-shadow: 
+            0 8px 32px 0 rgba(0, 0, 0, 0.37),
+            inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
+        transition: all 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+        position: relative;
+        overflow: hidden;
+    }
+    
+    /* Glow effect on hover */
+    .job-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: radial-gradient(circle at 50% 50%, rgba(76, 175, 80, 0.15), transparent 70%);
+        opacity: 0;
+        transition: opacity 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+        pointer-events: none;
     }
     
     .job-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 12px rgba(76, 175, 80, 0.2);
+        transform: translateY(-4px);
+        box-shadow: 
+            0 12px 40px rgba(76, 175, 80, 0.2),
+            inset 0 1px 0 0 rgba(255, 255, 255, 0.1);
+        border-color: rgba(76, 175, 80, 0.3);
+    }
+    
+    .job-card:hover::before {
+        opacity: 1;
     }
     
     .job-card-clicked {
         opacity: 0.6;
         filter: grayscale(50%);
-        border-left-color: #666;
+        border-left-color: #78909C;
     }
     
+    /* Typography */
     .job-title {
-        font-size: 1.4em;
-        font-weight: 700;
+        font-size: 1.563rem;
+        font-weight: 600;
         color: #4CAF50;
         margin-bottom: 8px;
+        letter-spacing: -0.02em;
     }
     
     .job-company {
-        font-size: 1.1em;
+        font-size: 1.1rem;
         color: #B0BEC5;
         margin-bottom: 12px;
+        font-weight: 500;
     }
     
     .job-meta {
@@ -82,7 +145,8 @@ st.markdown("""
         gap: 20px;
         flex-wrap: wrap;
         margin: 12px 0;
-        font-size: 0.95em;
+        font-size: 0.95rem;
+        color: #78909C;
     }
     
     .job-meta-item {
@@ -91,68 +155,203 @@ st.markdown("""
         gap: 6px;
     }
     
+    /* Score Badges with Glass Effect */
     .score-badge {
         display: inline-block;
-        padding: 6px 12px;
+        padding: 8px 16px;
         border-radius: 20px;
         font-weight: 600;
-        font-size: 0.9em;
+        font-size: 0.9rem;
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        transition: all 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+    }
+    
+    .score-badge:hover {
+        transform: scale(1.05);
     }
     
     .score-high {
-        background: linear-gradient(135deg, #4CAF50, #66BB6A);
+        background: linear-gradient(135deg, rgba(76, 175, 80, 0.8), rgba(102, 187, 106, 0.8));
         color: white;
+        box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
     }
     
     .score-medium {
-        background: linear-gradient(135deg, #FF9800, #FFB74D);
+        background: linear-gradient(135deg, rgba(255, 152, 0, 0.8), rgba(255, 183, 77, 0.8));
         color: white;
+        box-shadow: 0 4px 12px rgba(255, 152, 0, 0.3);
     }
     
     .score-low {
-        background: linear-gradient(135deg, #F44336, #EF5350);
+        background: linear-gradient(135deg, rgba(244, 67, 54, 0.8), rgba(239, 83, 80, 0.8));
         color: white;
+        box-shadow: 0 4px 12px rgba(244, 67, 54, 0.3);
     }
     
+    /* Salary Display */
     .salary-verified {
-        color: #4CAF50;
+        color: #66BB6A;
         font-weight: 600;
+        text-shadow: 0 0 10px rgba(102, 187, 106, 0.3);
     }
     
     .salary-inferred {
-        color: #FF9800;
+        color: #FFB74D;
+        font-weight: 500;
     }
     
     .ghost-job-warning {
-        background: #FF5252;
+        background: linear-gradient(135deg, rgba(239, 83, 80, 0.9), rgba(244, 67, 54, 0.9));
         color: white;
-        padding: 8px 12px;
-        border-radius: 6px;
+        padding: 8px 16px;
+        border-radius: 8px;
         font-weight: 600;
         display: inline-block;
+        backdrop-filter: blur(10px);
+        box-shadow: 0 4px 12px rgba(244, 67, 54, 0.4);
     }
     
-    /* Matrix editor */
-    .matrix-grid {
-        background: #1E2530;
-        border-radius: 8px;
-        padding: 20px;
-    }
-    
-    /* Buttons */
+    /* Enhanced Buttons */
     .stButton>button {
         background: linear-gradient(135deg, #4CAF50, #66BB6A);
         color: white;
         border: none;
-        border-radius: 8px;
-        padding: 10px 24px;
+        border-radius: 12px;
+        padding: 12px 24px;
         font-weight: 600;
-        transition: all 0.3s ease;
+        font-size: 1rem;
+        transition: all 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+        box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+        backdrop-filter: blur(10px);
     }
     
     .stButton>button:hover {
-        transform: scale(1.05);
-        box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
+        transform: translateY(-2px) scale(1.02);
+        box-shadow: 0 8px 24px rgba(76, 175, 80, 0.4);
+        background: linear-gradient(135deg, #66BB6A, #4CAF50);
+    }
+    
+    .stButton>button:active {
+        transform: translateY(0) scale(0.98);
+        box-shadow: 0 2px 8px rgba(76, 175, 80, 0.4);
+    }
+    
+    .stButton>button:focus-visible {
+        outline: 2px solid #4CAF50;
+        outline-offset: 4px;
+    }
+    
+    /* Input Fields with Glass Effect */
+    .stTextInput>div>div>input,
+    .stTextArea>div>div>textarea {
+        background: rgba(30, 37, 48, 0.5) !important;
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        border-radius: 12px !important;
+        color: #FAFAFA !important;
+        padding: 16px !important;
+        font-size: 1rem !important;
+        transition: all 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+    }
+    
+    .stTextInput>div>div>input:focus,
+    .stTextArea>div>div>textarea:focus {
+        border-color: rgba(76, 175, 80, 0.5) !important;
+        box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1) !important;
+        background: rgba(30, 37, 48, 0.7) !important;
+    }
+    
+    /* Tabs with Glass Effect */
+    .stTabs [data-baseweb="tab-list"] {
+        background: rgba(30, 37, 48, 0.5);
+        backdrop-filter: blur(10px);
+        border-radius: 12px;
+        padding: 8px;
+        gap: 8px;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        background: transparent;
+        border-radius: 8px;
+        color: #B0BEC5;
+        font-weight: 500;
+        padding: 12px 24px;
+        transition: all 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+    }
+    
+    .stTabs [data-baseweb="tab"]:hover {
+        background: rgba(76, 175, 80, 0.1);
+        color: #4CAF50;
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, #4CAF50, #66BB6A) !important;
+        color: white !important;
+        box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+    }
+    
+    /* Sidebar Glass Effect */
+    [data-testid="stSidebar"] {
+        background: rgba(20, 25, 35, 0.8);
+        backdrop-filter: blur(20px);
+        border-right: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    /* Expander with Glass Effect */
+    .streamlit-expanderHeader {
+        background: rgba(30, 37, 48, 0.5);
+        backdrop-filter: blur(10px);
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        transition: all 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+    }
+    
+    .streamlit-expanderHeader:hover {
+        background: rgba(30, 37, 48, 0.7);
+        border-color: rgba(76, 175, 80, 0.3);
+    }
+    
+    /* Metrics with Glass Cards */
+    [data-testid="stMetricValue"] {
+        font-size: 1.953rem;
+        font-weight: 600;
+        color: #4CAF50;
+    }
+    
+    /* Loading Spinner */
+    .stSpinner > div {
+        border-color: #4CAF50 transparent transparent transparent !important;
+    }
+    
+    /* Reduced Motion Support */
+    @media (prefers-reduced-motion: reduce) {
+        * {
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: 0.01ms !important;
+        }
+    }
+    
+    /* Scrollbar Styling */
+    ::-webkit-scrollbar {
+        width: 12px;
+    }
+    
+    ::-webkit-scrollbar-track {
+        background: rgba(30, 37, 48, 0.3);
+        border-radius: 6px;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+        background: rgba(76, 175, 80, 0.5);
+        border-radius: 6px;
+        border: 2px solid rgba(30, 37, 48, 0.3);
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+        background: rgba(76, 175, 80, 0.7);
     }
 </style>
 """, unsafe_allow_html=True)
@@ -380,33 +579,187 @@ def page_login():
 
 
 def page_upload_resume():
-    """Resume upload and analysis page."""
-    st.title("📄 Upload Resume")
+    """Universal Ingestor - Multi-modal resume input page."""
+    st.title("📄 Resume Ingestion")
+    st.markdown("Upload your resume via **text paste**, **cloud URL**, or **local file**.")
     
-    tab1, tab2 = st.tabs(["Upload File", "Paste Text"])
+    # Import ingestion functions
+    from engine import ingest_text, ingest_file, ingest_url, normalize_to_markdown
+    import asyncio
     
+    # Tabbed interface
+    tab1, tab2, tab3 = st.tabs(["⚡ Fast Paste", "☁️ Cloud Sync", "💾 Local Asset"])
+    
+    extracted_text = None
+    source_type = None
+    
+    # ========== TAB 1: TEXT INPUT ==========
     with tab1:
-        uploaded_file = st.file_uploader(
-            "Upload your resume (PDF or DOCX)",
-            type=['pdf', 'docx']
+        st.subheader("Paste Resume Text")
+        text_input = st.text_area(
+            "Paste your resume here",
+            height=300,
+            placeholder="Paste your resume text directly...",
+            key="text_input_area"
         )
         
-        if uploaded_file:
-            if uploaded_file.type == "application/pdf":
-                raw_text = extract_text_from_pdf(uploaded_file)
+        if st.button("Process Text", key="btn_text", type="primary"):
+            try:
+                extracted_text = ingest_text(text_input)
+                source_type = "text"
+                st.success("✅ Text processed successfully")
+            except ValueError as e:
+                st.error(f"❌ {str(e)}")
+    
+    # ========== TAB 2: URL INPUT ==========
+    with tab2:
+        st.subheader("Import from URL")
+        st.markdown("""
+        **Supported sources:**
+        - 🌐 Web portfolios (HTML pages)
+        - 📄 Direct PDF links
+        - 📝 Google Docs (must be publicly accessible)
+        """)
+        
+        url_input = st.text_input(
+            "Enter URL",
+            placeholder="https://example.com/resume.pdf or https://docs.google.com/document/d/...",
+            key="url_input_field"
+        )
+        
+        if st.button("Fetch from URL", key="btn_url", type="primary"):
+            if url_input:
+                try:
+                    with st.spinner("Fetching content from URL..."):
+                        # Run async function
+                        extracted_text = asyncio.run(ingest_url(url_input))
+                        source_type = "url"
+                    st.success("✅ Content fetched successfully")
+                except ValueError as e:
+                    st.error(f"❌ {str(e)}")
+                    
+                    # Provide recovery suggestions
+                    if "timeout" in str(e).lower():
+                        st.info("💡 **Suggestion:** The URL might be slow. Try downloading the file and uploading it in the 'Local Asset' tab.")
+                    elif "403" in str(e) or "not publicly accessible" in str(e).lower():
+                        st.info("💡 **Suggestion:** For Google Docs, go to Share → Change to 'Anyone with the link can view'")
+                    elif "network" in str(e).lower():
+                        st.info("💡 **Suggestion:** Check your internet connection or try pasting the content directly in the 'Fast Paste' tab.")
             else:
-                raw_text = extract_text_from_docx(uploaded_file)
+                st.warning("Please enter a URL first.")
+    
+    # ========== TAB 3: FILE UPLOAD ==========
+    with tab3:
+        st.subheader("Upload Local File")
+        st.markdown("**Supported formats:** PDF, DOCX (max 10MB)")
+        
+        uploaded_file = st.file_uploader(
+            "Choose PDF or DOCX",
+            type=['pdf', 'docx'],
+            help="Maximum file size: 10MB",
+            key="file_uploader"
+        )
+        
+        # Password input for encrypted PDFs
+        pdf_password = None
+        if uploaded_file and uploaded_file.name.endswith('.pdf'):
+            with st.expander("🔒 PDF Password (if encrypted)"):
+                pdf_password = st.text_input("Enter password", type="password", key="pdf_password")
+        
+        if uploaded_file and st.button("Extract Text", key="btn_file", type="primary"):
+            try:
+                # Check file size
+                if uploaded_file.size > 10 * 1024 * 1024:
+                    st.error("❌ File exceeds 10MB limit")
+                    st.info("💡 **Suggestion:** Try compressing the PDF or converting to a lighter format.")
+                else:
+                    with st.spinner(f"Extracting text from {uploaded_file.name}..."):
+                        extracted_text = ingest_file(uploaded_file, pdf_password)
+                        source_type = "file"
+                    st.success(f"✅ Text extracted from {uploaded_file.name}")
+            except ValueError as e:
+                st.error(f"❌ {str(e)}")
+                
+                # Provide recovery suggestions
+                if "password" in str(e).lower():
+                    st.info("💡 **Suggestion:** Enter the PDF password in the field above and try again.")
+                elif "unsupported format" in str(e).lower():
+                    st.info("💡 **Suggestion:** Only PDF and DOCX files are supported. Convert your file or paste the text directly.")
+                elif "readable text" in str(e).lower():
+                    st.info("💡 **Suggestion:** The file might be scanned/image-based. Try using OCR or paste the text manually.")
+    
+    # ========== VERIFICATION STEP ==========
+    if extracted_text:
+        st.divider()
+        st.subheader("🔍 Verification Step")
+        st.markdown("Review the extracted content before analysis.")
+        
+        # Normalize text
+        normalized_text = normalize_to_markdown(extracted_text)
+        
+        # Display preview in expander
+        with st.expander("📝 Preview Extracted Text", expanded=True):
+            # Show first 500 chars by default
+            preview_text = normalized_text[:500]
+            if len(normalized_text) > 500:
+                preview_text += f"\n\n... ({len(normalized_text) - 500} more characters)"
             
-            st.text_area("Extracted Text (verify accuracy)", raw_text, height=200)
+            st.text_area(
+                "Extracted Content Preview",
+                value=preview_text,
+                height=200,
+                key="preview_text",
+                disabled=True
+            )
             
-            if st.button("🔍 Analyze Profile"):
+            # Show full text option
+            if st.checkbox("Show full text", key="show_full"):
+                st.text_area(
+                    "Full Extracted Content",
+                    value=normalized_text,
+                    height=400,
+                    key="full_text"
+                )
+        
+        # Metadata display
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Character Count", f"{len(normalized_text):,}")
+        with col2:
+            word_count = len(normalized_text.split())
+            st.metric("Word Count", f"{word_count:,}")
+        with col3:
+            # Language detection (optional)
+            try:
+                from langdetect import detect
+                lang = detect(normalized_text)
+                st.metric("Detected Language", lang.upper())
+            except:
+                st.metric("Detected Language", "N/A")
+        
+        # Source indicator
+        source_icons = {
+            "text": "⚡ Direct Text",
+            "url": "☁️ Cloud URL",
+            "file": "💾 Local File"
+        }
+        if source_type:
+            st.info(f"**Source:** {source_icons.get(source_type, 'Unknown')}")
+        
+        st.divider()
+        
+        # Action buttons
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            if st.button("✅ Confirm & Analyze", type="primary", key="btn_confirm", use_container_width=True):
                 with st.spinner("Analyzing resume with Gemini Flash..."):
                     try:
-                        skills, seniority = analyze_profile(raw_text)
+                        skills, seniority = analyze_profile(normalized_text)
                         
                         profile = UserProfile(
                             user_id=st.session_state.user_id,
-                            raw_text=raw_text,
+                            raw_text=normalized_text,
                             extracted_skills=skills,
                             seniority=seniority
                         )
@@ -419,39 +772,25 @@ def page_upload_resume():
                         st.success(f"✅ Profile analyzed! Seniority: **{seniority}**")
                         st.write(f"**Extracted Skills:** {', '.join(skills)}")
                         
-                        st.info("Proceed to 'Generate Matrix' in the sidebar.")
+                        st.info("✨ Proceed to **'Edit Matrix'** in the sidebar to generate your search strategy.")
                     
                     except Exception as e:
-                        st.error(f"Analysis failed: {e}")
-    
-    with tab2:
-        raw_text = st.text_area("Paste your resume text here", height=300)
+                        st.error(f"❌ Analysis failed: {e}")
+                        st.info("💡 **Suggestion:** Check your API key or try with a different resume format.")
         
-        if st.button("🔍 Analyze Profile"):
-            if raw_text:
-                with st.spinner("Analyzing resume with Gemini Flash..."):
-                    try:
-                        skills, seniority = analyze_profile(raw_text)
-                        
-                        profile = UserProfile(
-                            user_id=st.session_state.user_id,
-                            raw_text=raw_text,
-                            extracted_skills=skills,
-                            seniority=seniority
-                        )
-                        
-                        st.session_state.profile = profile
-                        save_user(profile, st.session_state.user_email, st.session_state.api_key)
-                        
-                        st.success(f"✅ Profile analyzed! Seniority: **{seniority}**")
-                        st.write(f"**Extracted Skills:** {', '.join(skills)}")
-                        
-                        st.info("Proceed to 'Generate Matrix' in the sidebar.")
-                    
-                    except Exception as e:
-                        st.error(f"Analysis failed: {e}")
-            else:
-                st.warning("Please paste resume text first.")
+        with col2:
+            if st.button("✏️ Edit Text", key="btn_edit", use_container_width=True):
+                st.session_state.edit_mode = True
+                st.info("💡 Return to the 'Fast Paste' tab to edit the text directly.")
+        
+        with col3:
+            if st.button("🗑️ Discard & Restart", key="btn_discard", use_container_width=True):
+                # Clear only ingestion-related state
+                if 'profile' in st.session_state:
+                    del st.session_state.profile
+                st.success("✅ Cleared! You can start over.")
+                st.rerun()
+
 
 
 def page_edit_matrix():

@@ -17,7 +17,16 @@ streamlit-authenticator>=0.2.0
 
 # Document Parsing
 PyPDF2>=3.0.0
+pdfplumber>=0.10.0
 python-docx>=1.1.0
+
+# Web Scraping & HTML Processing
+beautifulsoup4>=4.12.0
+bleach>=6.1.0
+lxml>=4.9.0
+
+# Language Detection
+langdetect>=1.0.9
 
 # Data Export
 pandas>=2.0.0
