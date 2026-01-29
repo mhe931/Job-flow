@@ -356,10 +356,10 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ============================================================================
 # SESSION STATE INITIALIZATION
 # ============================================================================
 
+# Core authentication and user state
 if 'authenticated' not in st.session_state:
     st.session_state.authenticated = False
 if 'user_id' not in st.session_state:
@@ -372,6 +372,20 @@ if 'current_session_id' not in st.session_state:
     st.session_state.current_session_id = None
 if 'jobs' not in st.session_state:
     st.session_state.jobs = []
+
+# UI state for resume ingestion
+if 'show_full_text' not in st.session_state:
+    st.session_state.show_full_text = False
+if 'trigger_analysis' not in st.session_state:
+    st.session_state.trigger_analysis = False
+if 'edit_mode' not in st.session_state:
+    st.session_state.edit_mode = False
+if 'normalized_text' not in st.session_state:
+    st.session_state.normalized_text = None
+if 'extracted_text' not in st.session_state:
+    st.session_state.extracted_text = None
+if 'source_type' not in st.session_state:
+    st.session_state.source_type = None
 
 # Initialize database
 init_db()
@@ -537,27 +551,66 @@ def render_job_card(job: JobOpportunity, is_clicked: bool = False):
 # ============================================================================
 
 def page_login():
-    """Login page with API key setup."""
-    st.title("🎯 JobFlow AI")
-    st.subheader("Career Discovery Engine")
+    """Login page with API key setup - Liquid Glass Design."""
     
+    # Hero section
     st.markdown("""
-    ### Welcome to JobFlow AI
+    <div style="text-align: center; margin-bottom: 3rem;">
+        <h1 style="font-size: 3rem; font-weight: 700; color: #4CAF50; margin-bottom: 0.5rem; letter-spacing: -0.02em;">
+            🎯 JobFlow AI
+        </h1>
+        <p style="font-size: 1.5rem; color: #B0BEC5; font-weight: 300;">
+            Career Discovery Engine
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
     
-    Transform your resume into strategic job discovery campaigns with:
-    - **AI-Powered Profile Analysis** - Extract skills & seniority automatically
-    - **Strategic Matrix** - 10 hubs × 8 titles = 80 targeted searches
-    - **Dual-Score Ranking** - Match Score + Hiring Probability
-    - **Salary Benchmarking** - Verified + AI-inferred ranges with confidence
-    - **Ghost Job Detection** - Filter out stale/suspicious postings
-    """)
-    
+    # Login form
     with st.form("login_form"):
-        st.markdown("#### Enter Your Gemini API Key")
-        api_key = st.text_input("Google Gemini API Key", type="password")
-        user_email = st.text_input("Email (for session tracking)")
+        st.markdown("#### 🔑 Authentication")
         
-        submitted = st.form_submit_button("🚀 Start Discovery")
+        user_email = st.text_input(
+            "Email (for session tracking)",
+            placeholder="your.email@example.com",
+            help="Used to track your session and save your preferences"
+        )
+        
+        api_key = st.text_input(
+            "Google Gemini API Key",
+            type="password",
+            placeholder="Enter your API key",
+            help="Required for AI-powered profile analysis"
+        )
+        
+        # Prominent link to Google AI Studio
+        st.markdown("""
+        <div style="
+            background: rgba(66, 165, 245, 0.1);
+            border-left: 4px solid #42A5F5;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+        ">
+            <p style="margin: 0; color: #B0BEC5; font-size: 0.95rem;">
+                <strong style="color: #42A5F5;">💡 Need an API Key?</strong><br>
+                Get your free Gemini API key from Google AI Studio:
+            </p>
+            <a href="https://aistudio.google.com/app/apikey" target="_blank" style="
+                display: inline-block;
+                margin-top: 0.5rem;
+                padding: 0.5rem 1rem;
+                background: linear-gradient(135deg, #42A5F5, #64B5F6);
+                color: white;
+                text-decoration: none;
+                border-radius: 8px;
+                font-weight: 600;
+            ">
+                🔗 Get API Key →
+            </a>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        submitted = st.form_submit_button("🚀 Start Discovery", use_container_width=True)
         
         if submitted:
             if api_key and user_email:
@@ -575,7 +628,57 @@ def page_login():
                 st.success("✅ Authenticated! Redirecting...")
                 st.rerun()
             else:
-                st.error("Please provide both API key and email.")
+                st.error("❌ Please provide both API key and email.")
+    
+    # Feature highlights
+    st.markdown("<div style='margin-top: 3rem;'></div>", unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown("""
+        <div style="text-align: center; padding: 1.5rem;">
+            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🧠</div>
+            <h4 style="color: #4CAF50; margin-bottom: 0.5rem;">AI-Powered</h4>
+            <p style="color: #78909C; font-size: 0.9rem;">
+                Extract skills & seniority automatically from your resume
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown("""
+        <div style="text-align: center; padding: 1.5rem;">
+            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🎯</div>
+            <h4 style="color: #4CAF50; margin-bottom: 0.5rem;">Strategic Matrix</h4>
+            <p style="color: #78909C; font-size: 0.9rem;">
+                10 hubs × 8 titles = 80 targeted job searches
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        st.markdown("""
+        <div style="text-align: center; padding: 1.5rem;">
+            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">💰</div>
+            <h4 style="color: #4CAF50; margin-bottom: 0.5rem;">Salary Intel</h4>
+            <p style="color: #78909C; font-size: 0.9rem;">
+                Verified + AI-inferred salary ranges with confidence scores
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Additional features
+    st.markdown("<div style='margin-top: 2rem;'></div>", unsafe_allow_html=True)
+    
+    with st.expander("✨ More Features"):
+        st.markdown("""
+        - **Dual-Score Ranking** - Match Score + Hiring Probability
+        - **Ghost Job Detection** - Filter out stale/suspicious postings
+        - **Multi-Modal Ingestion** - Text, File Upload, or Cloud URL
+        - **Excel Export** - Download results with conditional formatting
+        - **Recede Logic** - Clicked jobs automatically sorted to bottom
+        """)
 
 
 def page_upload_resume():
@@ -712,13 +815,24 @@ def page_upload_resume():
                 disabled=True
             )
             
-            # Show full text option
-            if st.checkbox("Show full text", key="show_full"):
+            # Show full text option - Fixed with session state
+            show_full = st.checkbox(
+                "Show full text", 
+                key="show_full",
+                value=st.session_state.show_full_text
+            )
+            
+            # Update session state when checkbox changes
+            if show_full != st.session_state.show_full_text:
+                st.session_state.show_full_text = show_full
+            
+            if st.session_state.show_full_text:
                 st.text_area(
                     "Full Extracted Content",
                     value=normalized_text,
                     height=400,
-                    key="full_text"
+                    key="full_text",
+                    disabled=True
                 )
         
         # Metadata display
@@ -753,42 +867,58 @@ def page_upload_resume():
         
         with col1:
             if st.button("✅ Confirm & Analyze", type="primary", key="btn_confirm", use_container_width=True):
-                with st.spinner("Analyzing resume with Gemini Flash..."):
-                    try:
-                        skills, seniority = analyze_profile(normalized_text)
-                        
-                        profile = UserProfile(
-                            user_id=st.session_state.user_id,
-                            raw_text=normalized_text,
-                            extracted_skills=skills,
-                            seniority=seniority
-                        )
-                        
-                        st.session_state.profile = profile
-                        
-                        # Save to database
-                        save_user(profile, st.session_state.user_email, st.session_state.api_key)
-                        
-                        st.success(f"✅ Profile analyzed! Seniority: **{seniority}**")
-                        st.write(f"**Extracted Skills:** {', '.join(skills)}")
-                        
-                        st.info("✨ Proceed to **'Edit Matrix'** in the sidebar to generate your search strategy.")
+                # Store normalized text in session state
+                st.session_state.normalized_text = normalized_text
+                st.session_state.trigger_analysis = True
+                
+        # Execute analysis if triggered (outside button to persist across reruns)
+        if st.session_state.get('trigger_analysis', False) and st.session_state.normalized_text:
+            with st.spinner("Analyzing resume with Gemini Flash..."):
+                try:
+                    skills, seniority = analyze_profile(st.session_state.normalized_text)
                     
-                    except Exception as e:
-                        st.error(f"❌ Analysis failed: {e}")
-                        st.info("💡 **Suggestion:** Check your API key or try with a different resume format.")
+                    profile = UserProfile(
+                        user_id=st.session_state.user_id,
+                        raw_text=st.session_state.normalized_text,
+                        extracted_skills=skills,
+                        seniority=seniority
+                    )
+                    
+                    st.session_state.profile = profile
+                    
+                    # Save to database
+                    save_user(profile, st.session_state.user_email, st.session_state.api_key)
+                    
+                    st.success(f"✅ Profile analyzed! Seniority: **{seniority}**")
+                    st.write(f"**Extracted Skills:** {', '.join(skills)}")
+                    
+                    st.info("✨ Proceed to **'Edit Matrix'** in the sidebar to generate your search strategy.")
+                    
+                    # Clear trigger flag
+                    st.session_state.trigger_analysis = False
+                
+                except Exception as e:
+                    st.error(f"❌ Analysis failed: {e}")
+                    st.info("💡 **Suggestion:** Check your API key or try with a different resume format.")
+                    st.session_state.trigger_analysis = False
         
         with col2:
             if st.button("✏️ Edit Text", key="btn_edit", use_container_width=True):
+                # Clear extracted text to return to input mode
+                st.session_state.extracted_text = None
                 st.session_state.edit_mode = True
-                st.info("💡 Return to the 'Fast Paste' tab to edit the text directly.")
+                st.rerun()
         
         with col3:
             if st.button("🗑️ Discard & Restart", key="btn_discard", use_container_width=True):
-                # Clear only ingestion-related state
-                if 'profile' in st.session_state:
-                    del st.session_state.profile
-                st.success("✅ Cleared! You can start over.")
+                # Clear all ingestion-related state
+                keys_to_clear = [
+                    'profile', 'normalized_text', 'extracted_text', 
+                    'source_type', 'trigger_analysis', 'show_full_text', 'edit_mode'
+                ]
+                for key in keys_to_clear:
+                    if key in st.session_state:
+                        st.session_state[key] = None if key in ['normalized_text', 'extracted_text', 'source_type', 'profile'] else False
                 st.rerun()
 
 
