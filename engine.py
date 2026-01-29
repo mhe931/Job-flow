@@ -806,7 +806,7 @@ def test_api_key(api_key: str):
         
         # Simple test: List models
         # This confirms we can authenticate and reach the service
-        models = list(client.models.list(page_size=1))
+        models = list(client.models.list())
         
         if models:
             return True, ' API key validated successfully!'
